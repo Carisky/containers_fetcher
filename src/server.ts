@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || "3400", 10);
 
 function normalizeHeader(s: string): string {
   return (s ?? "")
