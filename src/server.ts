@@ -71,9 +71,10 @@ function buildContainerInfoFromCsv(csv: string): Record<string, { cen?: string; 
 async function fetchContainerInfo(cont: string, retries = 3): Promise<Record<string, { cen?: string; t_state?: string }>> {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const url = `https://baltichub.com/api/multi?csv=true&ids=${encodeURIComponent(JSON.stringify([cont]))}`;
+      const url = `https://baltichub.com/api/multi?csv=true&ids=["${cont}"]`;
+            console.log(url)
       const { data } = await axios.get<string>(url, {
-        headers: { Accept: "text/csv, */*;q=0.5" },
+        headers: { Accept: "text/csv, */*;q=0.5","User-Agent": "Mozilla/5.0",},
         responseType: "text",
         timeout: 20000
       });
