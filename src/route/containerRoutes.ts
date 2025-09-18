@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { ContainerController } from "../controller/containerController";
+import { checkFirebirdConnection } from "../service/firebirdStatusService";
 import basicAuth from "../middleware/basicAuth";
 import { getRequestLogs } from "../utils/requestLogFile";
 
@@ -7,6 +8,18 @@ const router = Router();
 
 router.post("/lookup-bct", ContainerController.lookupBct);
 router.post("/lookup", ContainerController.lookup);
+
+router.get("/huzar/winsad/db/status", async (_req, res) => {
+  try {
+    await checkFirebirdConnection();
+    res.json({ status: "ok" });
+  } catch (error) {
+    res.status(503).json({
+      status: "error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
 
 router.get("/utils/logs", basicAuth, async (_req, res, next) => {
   try {
