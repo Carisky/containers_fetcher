@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ContainerController } from "../controller/containerController";
-import { checkFirebirdConnection } from "../service/firebirdStatusService";
+import { checkFirebirdConnection, fetchCmrSampleRows } from "../service/firebirdStatusService";
 import basicAuth from "../middleware/basicAuth";
 import { getRequestLogs } from "../utils/requestLogFile";
 
@@ -13,6 +13,18 @@ router.get("/huzar/winsad/db/status", async (_req, res) => {
   try {
     await checkFirebirdConnection();
     res.json({ status: "ok" });
+  } catch (error) {
+    res.status(503).json({
+      status: "error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+router.get("/huzar/winsad/db/test", async (_req, res) => {
+  try {
+    const rows = await fetchCmrSampleRows();
+    res.json({ rows });
   } catch (error) {
     res.status(503).json({
       status: "error",

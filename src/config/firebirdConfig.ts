@@ -23,5 +23,5 @@ export const getFirebirdConfig = (): FirebirdConfig => ({
   pageSize: 8192,
   wireCrypt: "Required",
   authPlugins: "Srp",
-  libraryPath: "C:/Program Files/Firebird/Firebird_3_0/fbclient.dll"
+  
 });
