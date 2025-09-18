@@ -1,9 +1,21 @@
-import type { Attachment, Client, ConnectOptions } from "node-firebird-driver";
+import type {
+  Attachment,
+  Client,
+  ConnectOptions,
+  ResultSet,
+  Transaction,
+} from "node-firebird-driver";
 import { getFirebirdConfig, FirebirdConfig } from "../config/firebirdConfig";
 
 type NativeDriverModule = {
   createNativeClient: (library: string) => Client;
   getDefaultLibraryFilename: () => string;
+};
+
+type ConnectionContext = {
+  client: Client;
+  uri: string;
+  options: ConnectOptions;
 };
 
 let cachedNativeModule: NativeDriverModule | null = null;
@@ -53,6 +65,17 @@ const buildConnectOptions = (config: FirebirdConfig): ConnectOptions => ({
   role: config.role,
 });
 
+const createConnectionContext = (config: FirebirdConfig): ConnectionContext => {
+  const native = loadNativeDriver();
+  const library = config.libraryPath || native.getDefaultLibraryFilename();
+
+  return {
+    client: native.createNativeClient(library),
+    uri: buildConnectionUri(config),
+    options: buildConnectOptions(config),
+  };
+};
+
 const disconnectQuietly = async (attachment: Attachment | undefined | null) => {
   if (!attachment) {
     return;
@@ -89,24 +112,92 @@ const disposeQuietly = async (client: Client | undefined | null) => {
   }
 };
 
+const closeResultSetQuietly = async (resultSet: ResultSet | undefined | null) => {
+  if (!resultSet) {
+    return;
+  }
+
+  try {
+    if (resultSet.isValid) {
+      await resultSet.close();
+    }
+  } catch (error) {
+    console.warn(
+      `[firebird] Failed to close result set cleanly: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+};
+
+const rollbackQuietly = async (transaction: Transaction | undefined | null) => {
+  if (!transaction) {
+    return;
+  }
+
+  try {
+    if (transaction && transaction.isValid) {
+      await transaction.rollback();
+    }
+  } catch (error) {
+    console.warn(
+      `[firebird] Failed to rollback transaction cleanly: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+};
+
 export const checkFirebirdConnection = async (): Promise<void> => {
   const config = getFirebirdConfig();
-  const native = loadNativeDriver();
-  const library = config.libraryPath || native.getDefaultLibraryFilename();
+  const { client, uri, options } = createConnectionContext(config);
 
-  const client = native.createNativeClient(library);
   let attachment: Attachment | null = null;
 
   try {
-    const uri = buildConnectionUri(config);
-    const options = buildConnectOptions(config);
-
     console.log(
       `[firebird] Checking connection to ${uri} with user ${options.username ?? "(default)"}`
     );
 
     attachment = await client.connect(uri, options);
   } finally {
+    await disconnectQuietly(attachment);
+    await disposeQuietly(client);
+  }
+};
+
+export const fetchCmrSampleRows = async (): Promise<Record<string, unknown>[]> => {
+  const config = getFirebirdConfig();
+  const { client, uri, options } = createConnectionContext(config);
+
+  let attachment: Attachment | null = null;
+  let transaction: Transaction | null = null;
+  let resultSet: ResultSet | null = null;
+
+  try {
+    attachment = await client.connect(uri, options);
+    transaction = await attachment.startTransaction();
+
+    resultSet = await attachment.executeQuery(
+      transaction,
+      "SELECT FIRST 10 * FROM CMR"
+    );
+
+    const rows = await resultSet.fetchAsObject<Record<string, unknown>>();
+    await resultSet.close();
+    resultSet = null;
+
+    if (transaction && transaction.isValid) {
+      await transaction.commit();
+      transaction = null;
+    }
+
+    return rows;
+  } catch (error) {
+    await rollbackQuietly(transaction);
+    throw error;
+  } finally {
+    await closeResultSetQuietly(resultSet);
     await disconnectQuietly(attachment);
     await disposeQuietly(client);
   }
