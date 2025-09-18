@@ -1,27 +1,31 @@
 {
-  "name": "container-lookup",
-  "version": "1.0.0",
-  "main": "dist/server.js",
-  "scripts": {
-    "dev": "ts-node-dev --respawn src/server.ts",
-    "build": "tsc"
-  },
-  "dependencies": {
-    "@types/cors": "^2.8.19",
-    "axios": "^1.11.0",
-    "axios-cookiejar-support": "^6.0.4",
-    "body-parser": "^1.20.2",
-    "cheerio": "^1.1.2",
-    "cors": "^2.8.5",
-    "csv-parse": "^5.5.5",
-    "express": "^4.19.2",
-    "node-firebird": "^1.1.9",
-    "tough-cookie": "^5.1.2"
-  },
-  "devDependencies": {
-    "@types/express": "^4.17.21",
-    "@types/node": "^20.11.30",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.3"
-  }
+    "name": "container-lookup",
+    "version": "1.0.0",
+    "main": "dist/server.js",
+    "scripts": {
+        "dev": "ts-node-dev --respawn src/server.ts",
+        "build": "tsc"
+    },
+    "dependencies": {
+        "@types/cors": "^2.8.19",
+        "axios": "^1.11.0",
+        "axios-cookiejar-support": "^6.0.4",
+        "body-parser": "^1.20.2",
+        "cheerio": "^1.1.2",
+        "cors": "^2.8.5",
+        "csv-parse": "^5.5.5",
+        "express": "^4.19.2",
+        "node-firebird-driver": "^3.2.2",
+        "node-firebird-native-api": "^3.1.2",
+        "tough-cookie": "^5.1.2"
+    },
+    "devDependencies": {
+        "@types/express": "^4.17.21",
+        "@types/node": "^20.11.30",
+        "ts-node-dev": "^2.0.0",
+        "typescript": "^5.4.3"
+    },
+    "optionalDependencies": {
+        "node-firebird-driver-native": "^3.2.2"
+    }
 }
