@@ -20,6 +20,7 @@ export async function fetchContainerInfo(
       if (!data || data.includes("<div")) {
         if (attempt < retries) await sleep(10000);
       } else {
+
         const info = buildContainerInfoFromCsv(data);
         const i = info[cont] || {};
         return { [cont]: { cen: i.cen, t_state: i.t_state } };
