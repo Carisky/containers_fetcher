@@ -396,7 +396,7 @@ export const fetchWysylkiByMrn = async (
     transaction = await attachment.startTransaction();
 
     const sql = `
-      SELECT
+      SELECT FIRST 1
         r.*
       FROM WYSYLKICELINA r
       WHERE r.NRMRNDOK STARTING WITH ?

@@ -21,6 +21,38 @@ const xmlParser = new XMLParser({
   removeNSPrefix: true,
 });
 
+const regexCache = new Map<string, RegExp>();
+const invalidRegexPatterns = new Set<string>();
+const regexMismatchCache = new Set<string>();
+
+const resolveRegex = (pattern: string): RegExp | null => {
+  if (!pattern) {
+    return null;
+  }
+
+  if (regexCache.has(pattern)) {
+    return regexCache.get(pattern) ?? null;
+  }
+
+  if (invalidRegexPatterns.has(pattern)) {
+    return null;
+  }
+
+  try {
+    const compiled = new RegExp(pattern);
+    regexCache.set(pattern, compiled);
+    return compiled;
+  } catch (error) {
+    console.warn(
+      `[wysylkaXml] Invalid regex '${pattern}': ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    invalidRegexPatterns.add(pattern);
+    return null;
+  }
+};
+
 const sanitizeXml = (value: string): string => {
   if (!value) {
     return "";
@@ -143,8 +175,7 @@ const getValueAtPath = (root: unknown, path: string): string | null => {
     }
 
     if (Array.isArray(current)) {
-      current = current.length > 0 ? current[0] : null;
-      continue;
+      return null;
     }
 
     if (typeof current !== "object") {
@@ -165,11 +196,10 @@ const getValueAtPath = (root: unknown, path: string): string | null => {
     }
 
     if (Array.isArray(next)) {
-      if (segment.index !== undefined) {
-        next = next[segment.index];
-      } else {
-        next = next.length > 0 ? next[0] : null;
+      if (segment.index === undefined) {
+        return null;
       }
+      next = next[segment.index];
     } else if (segment.index !== undefined) {
       return null;
     }
@@ -218,10 +248,28 @@ const extractFieldsFromXml = (
     for (const candidatePath of field.paths) {
       try {
         const candidate = getValueAtPath(parsed, candidatePath);
-        if (candidate !== null) {
-          resolved = candidate;
-          break;
+        if (candidate === null) {
+          continue;
         }
+
+        if (field.regex) {
+          const regex = resolveRegex(field.regex);
+          if (regex) {
+            if (!regex.test(candidate)) {
+              const cacheKey = `${field.regex}::${candidatePath}`;
+              if (!regexMismatchCache.has(cacheKey)) {
+                regexMismatchCache.add(cacheKey);
+                console.warn(
+                  `[wysylkaXml] Value '${candidate}' for path '${candidatePath}' does not match regex '${field.regex}' (source '${sourceKey}').`
+                );
+              }
+              continue;
+            }
+          }
+        }
+
+        resolved = candidate;
+        break;
       } catch (error) {
         console.warn(
           `[wysylkaXml] Failed to resolve path '${candidatePath}' for '${sourceKey}': ${
@@ -258,3 +306,5 @@ export const parseXmlFieldsForWysylkaRow = (
   const entries = wysylkaXmlConfig.map((section) => extractSection(row, section));
   return Object.fromEntries(entries);
 };
+
+
