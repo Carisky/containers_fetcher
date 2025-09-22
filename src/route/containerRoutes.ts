@@ -1,13 +1,18 @@
 import { Router } from "express";
 import { ContainerController } from "../controller/containerController";
-import { checkFirebirdConnection, fetchCmrSampleRows, fetchWysylkiByMrn } from "../service/firebirdStatusService";
+import {
+  checkFirebirdConnection,
+  fetchCmrSampleRows,
+  fetchWysylkiByMrn,
+} from "../service/firebirdStatusService";
+import apiKeyAuth from "../middleware/apiKeyAuth";
 import basicAuth from "../middleware/basicAuth";
 import { getRequestLogs } from "../utils/requestLogFile";
 
 const router = Router();
 
-router.post("/lookup-bct", ContainerController.lookupBct);
-router.post("/lookup", ContainerController.lookup);
+router.post("/lookup-bct", apiKeyAuth, ContainerController.lookupBct);
+router.post("/lookup", apiKeyAuth, ContainerController.lookup);
 
 router.get("/huzar/winsad/db/status", async (_req, res) => {
   try {
