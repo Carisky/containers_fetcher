@@ -1,3 +1,5 @@
+import { gunzipSync, inflateRawSync, inflateSync } from "zlib";
+import { Blob as FirebirdBlob } from "node-firebird-driver";
 import type {
   Attachment,
   Client,
@@ -147,6 +149,332 @@ const rollbackQuietly = async (transaction: Transaction | undefined | null) => {
     );
   }
 };
+
+type RawWysylkaRow = {
+  ID_WYSYLKI: unknown;
+  TYPDOKUMENTUZRD: unknown;
+  DOWEBCEL: unknown;
+  OPERACJA: unknown;
+  PRZETWORZONY: unknown;
+  DATAUTWORZENIA: unknown;
+  DATAROZPOPER: unknown;
+  DATAWYSLANIA: unknown;
+  TRESCBLEDU: unknown;
+  STATUSTRANSMISJI: unknown;
+  NAZWAPLIKU: unknown;
+  DOKUMENTXML: unknown;
+  ODPOWIEDZXML: unknown;
+};
+
+export type WysylkaSample = {
+  idWysylki: number;
+  typDokumentuZrd: string | null;
+  dowebcel: string | null;
+  operacja: string | null;
+  przetworzony: number | null;
+  dataUtworzenia: string | null;
+  dataRozpoper: string | null;
+  dataWyslania: string | null;
+  trescBledu: string | null;
+  statusTransmisji: string | null;
+  nazwaPliku: string | null;
+  dokumentXml: string | null;
+  dokumentXmlBytes: number | null;
+  odpowiedzXml: string | null;
+  odpowiedzXmlBytes: number | null;
+};
+
+type DecodedXmlResult = {
+  decoded: string | null;
+  byteLength: number | null;
+};
+
+const readBlobAsBuffer = async (
+  attachment: Attachment,
+  transaction: Transaction,
+  value: unknown
+): Promise<Buffer | null> => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (Buffer.isBuffer(value)) {
+    return value.length === 0 ? Buffer.alloc(0) : Buffer.from(value);
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    const view = value as ArrayBufferView;
+    return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return Buffer.from(value);
+  }
+
+  if (typeof value === "string" && value.length > 0) {
+    return Buffer.from(value, "binary");
+  }
+
+  if (value instanceof FirebirdBlob) {
+    if (!transaction || !transaction.isValid) {
+      throw new Error("Cannot read Firebird blob: transaction is not active");
+    }
+
+    const stream = await attachment.openBlob(transaction, value);
+    const chunks: Buffer[] = [];
+    const reusable = Buffer.alloc(8192);
+
+    try {
+      for (;;) {
+        const bytesRead = await stream.read(reusable);
+        if (bytesRead === -1) {
+          break;
+        }
+
+        if (bytesRead > 0) {
+          chunks.push(Buffer.from(reusable.subarray(0, bytesRead)));
+        }
+      }
+    } finally {
+      await stream.close();
+    }
+
+    if (chunks.length === 0) {
+      return Buffer.alloc(0);
+    }
+
+    return Buffer.concat(chunks);
+  }
+
+  return null;
+};
+
+const decodeZlibBuffer = (buffer: Buffer | null, context: string): DecodedXmlResult => {
+  if (buffer === null) {
+    return { decoded: null, byteLength: null };
+  }
+
+  if (buffer.length === 0) {
+    return { decoded: "", byteLength: 0 };
+  }
+
+  const inflateCandidates = [inflateSync, inflateRawSync, gunzipSync] as const;
+  let lastError: unknown = null;
+
+  for (const inflate of inflateCandidates) {
+    try {
+      const output = inflate(buffer);
+      return { decoded: output.toString("utf8"), byteLength: buffer.length };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  const fallbackText = buffer.toString("utf8");
+  if (fallbackText.length > 0) {
+    return { decoded: fallbackText, byteLength: buffer.length };
+  }
+
+  const errorMessage = (
+    lastError instanceof Error ? lastError.message : String(lastError)
+  );
+
+  throw new Error(
+    `${context}: failed to decompress zlib payload (${buffer.length} bytes). Last error: ${errorMessage}`
+  );
+};
+
+const toNullableText = (value: unknown): string | null => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (
+    typeof value === "number" ||
+    typeof value === "bigint" ||
+    typeof value === "boolean"
+  ) {
+    return String(value);
+  }
+
+  return null;
+};
+
+const toNullableDateText = (value: unknown): string | null => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  return null;
+};
+
+const toNullableNumeric = (value: unknown): number | null => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+
+  if (typeof value === "boolean") {
+    return value ? 1 : 0;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+
+    const parsed = Number(trimmed);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  return null;
+};
+
+const mapRawWysylkaRow = async (
+  row: RawWysylkaRow,
+  attachment: Attachment,
+  transaction: Transaction
+): Promise<WysylkaSample> => {
+  const id = Number(row.ID_WYSYLKI);
+  if (!Number.isFinite(id)) {
+    throw new Error(`Unexpected ID_WYSYLKI value: ${row.ID_WYSYLKI}`);
+  }
+
+  const dokumentBuffer = await readBlobAsBuffer(
+    attachment,
+    transaction,
+    row.DOKUMENTXML
+  );
+  const dokument = decodeZlibBuffer(
+    dokumentBuffer,
+    `WYSYLKICELINA.ID_WYSYLKI=${id} DOKUMENTXML`
+  );
+
+  const odpowiedzBuffer = await readBlobAsBuffer(
+    attachment,
+    transaction,
+    row.ODPOWIEDZXML
+  );
+  const odpowiedz = decodeZlibBuffer(
+    odpowiedzBuffer,
+    `WYSYLKICELINA.ID_WYSYLKI=${id} ODPOWIEDZXML`
+  );
+
+  return {
+    idWysylki: id,
+    typDokumentuZrd: toNullableText(row.TYPDOKUMENTUZRD),
+    dowebcel: toNullableText(row.DOWEBCEL),
+    operacja: toNullableText(row.OPERACJA),
+    przetworzony: toNullableNumeric(row.PRZETWORZONY),
+    dataUtworzenia: toNullableDateText(row.DATAUTWORZENIA),
+    dataRozpoper: toNullableDateText(row.DATAROZPOPER),
+    dataWyslania: toNullableDateText(row.DATAWYSLANIA),
+    trescBledu: toNullableText(row.TRESCBLEDU),
+    statusTransmisji: toNullableText(row.STATUSTRANSMISJI),
+    nazwaPliku: toNullableText(row.NAZWAPLIKU),
+    dokumentXml: dokument.decoded,
+    dokumentXmlBytes: dokument.byteLength,
+    odpowiedzXml: odpowiedz.decoded,
+    odpowiedzXmlBytes: odpowiedz.byteLength,
+  };
+};
+
+export const fetchWysylkiSamples = async (limit = 5): Promise<WysylkaSample[]> => {
+  const numericLimit = Number(limit);
+  if (!Number.isInteger(numericLimit) || numericLimit <= 0) {
+    throw new Error(`Invalid limit value: ${limit}`);
+  }
+
+  const effectiveLimit = Math.min(Math.max(numericLimit, 1), 50);
+  const config = getFirebirdConfig();
+  const { client, uri, options } = createConnectionContext(config);
+
+  let attachment: Attachment | null = null;
+  let transaction: Transaction | null = null;
+  let resultSet: ResultSet | null = null;
+
+  try {
+    attachment = await client.connect(uri, options);
+    transaction = await attachment.startTransaction();
+
+    const sql = `
+      SELECT FIRST ${effectiveLimit}
+        r.ID_WYSYLKI,
+        r.TYPDOKUMENTUZRD,
+        r.DOWEBCEL,
+        r.OPERACJA,
+        r.PRZETWORZONY,
+        r.DATAUTWORZENIA,
+        r.DATAROZPOPER,
+        r.DATAWYSLANIA,
+        r.TRESCBLEDU,
+        r.STATUSTRANSMISJI,
+        r.NAZWAPLIKU,
+        r.DOKUMENTXML,
+        r.ODPOWIEDZXML
+      FROM WYSYLKICELINA r
+      ORDER BY r.ID_WYSYLKI DESC
+    `;
+
+    resultSet = await attachment.executeQuery(transaction, sql);
+    const rows = await resultSet.fetchAsObject<RawWysylkaRow>();
+    await resultSet.close();
+    resultSet = null;
+
+    const activeAttachment = attachment;
+    const activeTransaction = transaction;
+
+    if (!activeAttachment || !activeTransaction || !activeTransaction.isValid) {
+      throw new Error("Firebird transaction ended unexpectedly while reading WYSYLKICELINA blobs");
+    }
+
+    const samples: WysylkaSample[] = [];
+    for (const row of rows) {
+      samples.push(await mapRawWysylkaRow(row, activeAttachment, activeTransaction));
+    }
+
+    if (activeTransaction.isValid) {
+      await activeTransaction.commit();
+    }
+    transaction = null;
+
+    return samples;
+  } catch (error) {
+    await rollbackQuietly(transaction);
+    throw error;
+  } finally {
+    await closeResultSetQuietly(resultSet);
+    await disconnectQuietly(attachment);
+    await disposeQuietly(client);
+  }
+};
+
 
 export const checkFirebirdConnection = async (): Promise<void> => {
   const config = getFirebirdConfig();
