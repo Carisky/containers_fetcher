@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { ContainerController } from "../controller/containerController";
-import { checkFirebirdConnection, fetchCmrSampleRows, fetchWysylkiSamples } from "../service/firebirdStatusService";
+import { checkFirebirdConnection, fetchCmrSampleRows, fetchWysylkiByMrn, fetchWysylkiSamples } from "../service/firebirdStatusService";
 import basicAuth from "../middleware/basicAuth";
 import { getRequestLogs } from "../utils/requestLogFile";
 
@@ -90,6 +90,29 @@ router.get("/huzar/winsad/db/wysylki/sample", async (req, res) => {
       rows,
       ...(isCapped ? { requestedLimit } : {}),
     });
+  } catch (error) {
+    res.status(503).json({
+      status: "error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
+  const rawMrn = typeof req.params.mrn === "string" ? req.params.mrn : "";
+  const normalizedMrn = rawMrn.trim();
+
+  if (!normalizedMrn) {
+    res.status(400).json({
+      status: "error",
+      message: "Route parameter `mrn` must be a non-empty string.",
+    });
+    return;
+  }
+
+  try {
+    const rows = await fetchWysylkiByMrn(normalizedMrn);
+    res.json({ mrn: normalizedMrn, count: rows.length, rows });
   } catch (error) {
     res.status(503).json({
       status: "error",

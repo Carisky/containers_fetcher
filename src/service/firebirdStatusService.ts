@@ -284,6 +284,61 @@ const decodeZlibBuffer = (buffer: Buffer | null, context: string): DecodedXmlRes
   );
 };
 
+const bufferToUtf8OrBase64 = (buffer: Buffer): string => {
+  if (buffer.length === 0) {
+    return "";
+  }
+
+  const utf8Value = buffer.toString("utf8");
+  const reencoded = Buffer.from(utf8Value, "utf8");
+  if (reencoded.length === buffer.length && reencoded.equals(buffer)) {
+    return utf8Value;
+  }
+
+  return buffer.toString("base64");
+};
+
+const normalizeColumnValue = async (
+  key: string,
+  value: unknown,
+  attachment: Attachment,
+  transaction: Transaction
+): Promise<unknown> => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+
+  if (Buffer.isBuffer(value)) {
+    return bufferToUtf8OrBase64(value);
+  }
+
+  if (ArrayBuffer.isView(value)) {
+    const view = value as ArrayBufferView;
+    return bufferToUtf8OrBase64(
+      Buffer.from(view.buffer, view.byteOffset, view.byteLength)
+    );
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return bufferToUtf8OrBase64(Buffer.from(value));
+  }
+
+  if (value instanceof FirebirdBlob) {
+    const blobBuffer = await readBlobAsBuffer(attachment, transaction, value);
+    return blobBuffer ? bufferToUtf8OrBase64(blobBuffer) : null;
+  }
+
+  return value;
+};
+
 const toNullableText = (value: unknown): string | null => {
   if (value === undefined || value === null) {
     return null;
@@ -405,6 +460,75 @@ const mapRawWysylkaRow = async (
   };
 };
 
+const mapWysylkaRowWithAllColumns = async (
+  row: Record<string, unknown>,
+  attachment: Attachment,
+  transaction: Transaction
+): Promise<Record<string, unknown>> => {
+  const rawId = row["ID_WYSYLKI"];
+  const numericId = typeof rawId === "number" ? rawId : Number(rawId);
+  const contextId = Number.isFinite(numericId)
+    ? numericId.toString()
+    : String(rawId ?? "unknown");
+
+  const dokumentBuffer = await readBlobAsBuffer(
+    attachment,
+    transaction,
+    row["DOKUMENTXML"]
+  );
+  const dokument = decodeZlibBuffer(
+    dokumentBuffer,
+    `WYSYLKICELINA.ID_WYSYLKI=${contextId} DOKUMENTXML`
+  );
+
+  const odpowiedzBuffer = await readBlobAsBuffer(
+    attachment,
+    transaction,
+    row["ODPOWIEDZXML"]
+  );
+  const odpowiedz = decodeZlibBuffer(
+    odpowiedzBuffer,
+    `WYSYLKICELINA.ID_WYSYLKI=${contextId} ODPOWIEDZXML`
+  );
+
+  const base: Record<string, unknown> = {};
+  const entries = await Promise.all(
+    Object.entries(row).map(async ([key, value]) => {
+      if (key === "DOKUMENTXML" || key === "ODPOWIEDZXML") {
+        return null;
+      }
+
+      const normalized = await normalizeColumnValue(key, value, attachment, transaction);
+      return [key, normalized] as const;
+    })
+  );
+
+  for (const entry of entries) {
+    if (!entry) {
+      continue;
+    }
+
+    const [key, value] = entry;
+    base[key] = value;
+  }
+
+  if (Number.isFinite(numericId)) {
+    base.ID_WYSYLKI = numericId;
+    base.idWysylki = numericId;
+  } else if (Object.prototype.hasOwnProperty.call(row, "ID_WYSYLKI")) {
+    base.idWysylki = row["ID_WYSYLKI"] ?? null;
+  }
+
+  base.dokumentXml = dokument.decoded;
+  base.dokumentXmlBytes = dokument.byteLength;
+  base.odpowiedzXml = odpowiedz.decoded;
+  base.odpowiedzXmlBytes = odpowiedz.byteLength;
+
+  return base;
+};
+
+
+
 export const fetchWysylkiSamples = async (limit = 5): Promise<WysylkaSample[]> => {
   const numericLimit = Number(limit);
   if (!Number.isInteger(numericLimit) || numericLimit <= 0) {
@@ -465,6 +589,67 @@ export const fetchWysylkiSamples = async (limit = 5): Promise<WysylkaSample[]> =
     transaction = null;
 
     return samples;
+  } catch (error) {
+    await rollbackQuietly(transaction);
+    throw error;
+  } finally {
+    await closeResultSetQuietly(resultSet);
+    await disconnectQuietly(attachment);
+    await disposeQuietly(client);
+  }
+
+};
+
+
+export const fetchWysylkiByMrn = async (
+  mrn: string
+): Promise<Record<string, unknown>[]> => {
+  const normalizedMrn = typeof mrn === "string" ? mrn.trim() : "";
+  if (!normalizedMrn) {
+    throw new Error("MRN value must be a non-empty string");
+  }
+
+  const config = getFirebirdConfig();
+  const { client, uri, options } = createConnectionContext(config);
+
+  let attachment: Attachment | null = null;
+  let transaction: Transaction | null = null;
+  let resultSet: ResultSet | null = null;
+
+  try {
+    attachment = await client.connect(uri, options);
+    transaction = await attachment.startTransaction();
+
+    const sql = `
+      SELECT
+        r.*
+      FROM WYSYLKICELINA r
+      WHERE r.NRMRNDOK STARTING WITH ?
+      ORDER BY r.ID_WYSYLKI DESC
+    `;
+
+    resultSet = await attachment.executeQuery(transaction, sql, [normalizedMrn]);
+    const rows = await resultSet.fetchAsObject<Record<string, unknown>>();
+    await resultSet.close();
+    resultSet = null;
+
+    if (!attachment || !transaction || !transaction.isValid) {
+      throw new Error(
+        "Firebird transaction ended unexpectedly while decoding WYSYLKICELINA rows"
+      );
+    }
+
+    const decodedRows: Record<string, unknown>[] = [];
+    for (const row of rows) {
+      decodedRows.push(await mapWysylkaRowWithAllColumns(row, attachment, transaction));
+    }
+
+    if (transaction.isValid) {
+      await transaction.commit();
+    }
+    transaction = null;
+
+    return decodedRows;
   } catch (error) {
     await rollbackQuietly(transaction);
     throw error;
