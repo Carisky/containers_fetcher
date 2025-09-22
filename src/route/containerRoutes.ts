@@ -7,6 +7,7 @@ import {
 } from "../service/firebirdStatusService";
 import apiKeyAuth from "../middleware/apiKeyAuth";
 import basicAuth from "../middleware/basicAuth";
+import { parseXmlFieldsForWysylkaRow } from "../utils/wysylkaXml";
 import { getRequestLogs } from "../utils/requestLogFile";
 
 const router = Router();
@@ -52,7 +53,12 @@ router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
 
   try {
     const rows = await fetchWysylkiByMrn(normalizedMrn);
-    res.json({ mrn: normalizedMrn, count: rows.length, rows });
+    const enrichedRows = rows.map((row) => ({
+      ...row,
+      ...parseXmlFieldsForWysylkaRow(row),
+    }));
+
+    res.json({ mrn: normalizedMrn, count: enrichedRows.length, rows: enrichedRows });
   } catch (error) {
     res.status(503).json({
       status: "error",
