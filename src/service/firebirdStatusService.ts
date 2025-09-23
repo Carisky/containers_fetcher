@@ -412,7 +412,7 @@ export const fetchWysylkiByMrn = async (
     }
 
     const sql = `
-      SELECT FIRST 1
+      SELECT FIRST 10
         r.*
       FROM WYSYLKICELINA r
       WHERE ${conditions.join("\n        AND ")}
