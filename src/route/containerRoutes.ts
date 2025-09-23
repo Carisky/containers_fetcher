@@ -42,6 +42,9 @@ router.get("/huzar/winsad/db/test", async (_req, res) => {
 router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
   const rawMrn = typeof req.params.mrn === "string" ? req.params.mrn : "";
   const normalizedMrn = rawMrn.trim();
+  const rawFileCode =
+    typeof req.query.fileCode === "string" ? req.query.fileCode : "";
+  const normalizedFileCode = rawFileCode.trim();
 
   if (!normalizedMrn) {
     res.status(400).json({
@@ -52,13 +55,20 @@ router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
   }
 
   try {
-    const rows = await fetchWysylkiByMrn(normalizedMrn);
+    const rows = await fetchWysylkiByMrn(normalizedMrn, {
+      fileCode: normalizedFileCode || undefined,
+    });
     const enrichedRows = rows.map((row) => ({
       ...row,
       ...parseXmlFieldsForWysylkaRow(row),
     }));
 
-    res.json({ mrn: normalizedMrn, count: enrichedRows.length, rows: enrichedRows });
+    res.json({
+      mrn: normalizedMrn,
+      fileCode: normalizedFileCode || undefined,
+      count: enrichedRows.length,
+      rows: enrichedRows,
+    });
   } catch (error) {
     res.status(503).json({
       status: "error",
