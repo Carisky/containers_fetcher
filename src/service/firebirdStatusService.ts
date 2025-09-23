@@ -376,8 +376,13 @@ const mapWysylkaRowWithAllColumns = async (
 
 
 
+type FetchWysylkiByMrnOptions = {
+  fileCode?: string;
+};
+
 export const fetchWysylkiByMrn = async (
-  mrn: string
+  mrn: string,
+  filterOptions: FetchWysylkiByMrnOptions = {}
 ): Promise<Record<string, unknown>[]> => {
   const normalizedMrn = typeof mrn === "string" ? mrn.trim() : "";
   if (!normalizedMrn) {
@@ -385,25 +390,36 @@ export const fetchWysylkiByMrn = async (
   }
 
   const config = getFirebirdConfig();
-  const { client, uri, options } = createConnectionContext(config);
+  const { client, uri, options: connectOptions } = createConnectionContext(config);
 
   let attachment: Attachment | null = null;
   let transaction: Transaction | null = null;
   let resultSet: ResultSet | null = null;
 
   try {
-    attachment = await client.connect(uri, options);
+    attachment = await client.connect(uri, connectOptions);
     transaction = await attachment.startTransaction();
+
+    const normalizedFileCode =
+      typeof filterOptions.fileCode === "string" ? filterOptions.fileCode.trim() : "";
+
+    const conditions = ["r.NRMRNDOK STARTING WITH ?"];
+    const parameters: unknown[] = [normalizedMrn];
+
+    if (normalizedFileCode) {
+      conditions.push("r.NAZWAPLIKU CONTAINING ?");
+      parameters.push(normalizedFileCode);
+    }
 
     const sql = `
       SELECT FIRST 1
         r.*
       FROM WYSYLKICELINA r
-      WHERE r.NRMRNDOK STARTING WITH ?
+      WHERE ${conditions.join("\n        AND ")}
       ORDER BY r.ID_WYSYLKI DESC
     `;
 
-    resultSet = await attachment.executeQuery(transaction, sql, [normalizedMrn]);
+    resultSet = await attachment.executeQuery(transaction, sql, parameters);
     const rows = await resultSet.fetchAsObject<Record<string, unknown>>();
     await resultSet.close();
     resultSet = null;
