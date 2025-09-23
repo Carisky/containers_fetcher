@@ -69,7 +69,27 @@ export const wysylkaXmlConfig: readonly WysylkaXmlSectionConfig[] = [
         ],
         regex: "^[A-Z]{3}$",
         description: "Guarantee currency code.",
-      },    ],
+      },
+      {
+        name: "deliveryDate",
+        paths: [
+          "IE029PL.CountrySpecificDataPL.DeliveryDate",
+          "IE029PL.CC029C.CountrySpecificDataPL.DeliveryDate",
+          "IE028PL.CC028C.CountrySpecificDataPL.DeliveryDate",
+        ],
+        regex: "^\\d{4}-\\d{2}-\\d{2}$",
+        description: "Delivery date returned in the country specific data.",
+      },
+      {
+        name: "grn",
+        paths: [
+          "IE029PL.CC029C.Guarantee.GuaranteeReference.GRN",
+          "IE028PL.CC028C.Guarantee.GuaranteeReference.GRN",
+        ],
+        regex: "^[A-Z0-9]+$",
+        description: "Guarantee reference number (GRN) for the guarantee entry.",
+      },
+    ],
   },
   {
     source: "dokumentXml",
@@ -79,5 +99,6 @@ export const wysylkaXmlConfig: readonly WysylkaXmlSectionConfig[] = [
     ],
   },
 ];
+
 
 
