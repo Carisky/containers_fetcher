@@ -11,7 +11,7 @@ const containerKeys = [
   "container"
 ] as const;
 
-const cenPrimaryKeys = ["cennumber", "cen"] as const;
+const cenPrimaryKeys = ["cennumber", "cen", "vetseal", "customsseal"] as const;
 const inboundModeKeys = ["inboundmode"] as const;
 const carrierSealKeys = ["carrierseal"] as const;
 const vetSealKeys = ["vetseal"] as const;

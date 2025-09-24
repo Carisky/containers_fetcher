@@ -66,6 +66,7 @@ jobs:
             FIREBIRD_AUTH_PLUGINS=${{ secrets.FIREBIRD_AUTH_PLUGINS }}
             FIREBIRD_PLUGIN_NAME=${{ secrets.FIREBIRD_PLUGIN_NAME }}
             FIREBIRD_LIBRARY_PATH=${{ secrets.FIREBIRD_LIBRARY_PATH }}
+            CONTAINER_LOOKUP_CONCURRENCY=${{ secrets.CONTAINER_LOOKUP_CONCURRENCY }}
             EOF
             docker stop containers-fetcher || true
             docker rm containers-fetcher || true
