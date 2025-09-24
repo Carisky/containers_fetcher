@@ -53,4 +53,23 @@ jobs:
             docker rm containers-fetcher || true
             docker pull ${{ env.IMAGE_NAME }}:latest
             docker image prune -f --filter "dangling=true"
-            docker run -d --name containers-fetcher --restart unless-stopped -p 3400:3400 ${{ env.IMAGE_NAME }}:latest
+            docker run -d \
+              --name containers-fetcher \
+              --restart unless-stopped \
+              -p 3400:3400 \
+              -e PORT=${{ secrets.APP_PORT }} \
+              -e API_KEY_HEADER=${{ secrets.API_KEY_HEADER }} \
+              -e API_KEYS=${{ secrets.API_KEYS }} \
+              -e FIREBIRD_HOST=${{ secrets.FIREBIRD_HOST }} \
+              -e FIREBIRD_PORT=${{ secrets.FIREBIRD_PORT }} \
+              -e FIREBIRD_DATABASE=${{ secrets.FIREBIRD_DATABASE }} \
+              -e FIREBIRD_USER=${{ secrets.FIREBIRD_USER }} \
+              -e FIREBIRD_PASSWORD=${{ secrets.FIREBIRD_PASSWORD }} \
+              -e FIREBIRD_ROLE=${{ secrets.FIREBIRD_ROLE }} \
+              -e FIREBIRD_PAGE_SIZE=${{ secrets.FIREBIRD_PAGE_SIZE }} \
+              -e FIREBIRD_CHARSET=${{ secrets.FIREBIRD_CHARSET }} \
+              -e FIREBIRD_WIRE_CRYPT=${{ secrets.FIREBIRD_WIRE_CRYPT }} \
+              -e FIREBIRD_AUTH_PLUGINS=${{ secrets.FIREBIRD_AUTH_PLUGINS }} \
+              -e FIREBIRD_PLUGIN_NAME=${{ secrets.FIREBIRD_PLUGIN_NAME }} \
+              -e FIREBIRD_LIBRARY_PATH=${{ secrets.FIREBIRD_LIBRARY_PATH }} \
+              ${{ env.IMAGE_NAME }}:latest
