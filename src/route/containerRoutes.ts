@@ -4,7 +4,7 @@ import {
   checkFirebirdConnection,
   fetchCmrSampleRows,
   fetchWysylkiByMrn,
-} from "../service/firebirdStatusService";
+} from "../service/firebird";
 import apiKeyAuth from "../middleware/apiKeyAuth";
 import basicAuth from "../middleware/basicAuth";
 import { parseXmlFieldsForWysylkaRow } from "../utils/wysylkaXml";
