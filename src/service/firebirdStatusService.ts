@@ -378,6 +378,8 @@ const mapWysylkaRowWithAllColumns = async (
 
 type FetchWysylkiByMrnOptions = {
   fileCode?: string;
+  limit?: number;
+  preferXml?: boolean;
 };
 
 export const fetchWysylkiByMrn = async (
@@ -400,6 +402,12 @@ export const fetchWysylkiByMrn = async (
     attachment = await client.connect(uri, connectOptions);
     transaction = await attachment.startTransaction();
 
+    const preferXml = filterOptions.preferXml === true;
+    const rawLimit =
+      typeof filterOptions.limit === "number" ? filterOptions.limit : Number.NaN;
+    const fallbackLimit = preferXml ? 1 : 10;
+    const limitCandidate = Number.isFinite(rawLimit) ? rawLimit : fallbackLimit;
+    const limit = Math.min(Math.max(Math.trunc(limitCandidate), 1), 50);
     const normalizedFileCode =
       typeof filterOptions.fileCode === "string" ? filterOptions.fileCode.trim() : "";
 
@@ -411,8 +419,13 @@ export const fetchWysylkiByMrn = async (
       parameters.push(normalizedFileCode);
     }
 
+    if (preferXml) {
+      conditions.push("UPPER(r.NAZWAPLIKU) LIKE ?");
+      parameters.push("%.XML");
+    }
+
     const sql = `
-      SELECT FIRST 10
+      SELECT FIRST ${limit}
         r.*
       FROM WYSYLKICELINA r
       WHERE ${conditions.join("\n        AND ")}
@@ -506,3 +519,5 @@ export const fetchCmrSampleRows = async (): Promise<Record<string, unknown>[]> =
     await disposeQuietly(client);
   }
 };
+
+

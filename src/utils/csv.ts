@@ -88,7 +88,7 @@ const CEN_CONFIDENCE = {
   PRIMARY: 3,
 } as const;
 
-const NO_CEN_VALUE = "NO";
+const NO_CEN_VALUE = "";
 
 const pickCen = (
   row: Record<string, string | undefined>,
