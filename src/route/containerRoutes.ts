@@ -10,6 +10,22 @@ import basicAuth from "../middleware/basicAuth";
 import { parseXmlFieldsForWysylkaRow } from "../utils/wysylkaXml";
 import { getRequestLogs } from "../utils/requestLogFile";
 
+const getFirstQueryParam = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    for (const element of value) {
+      if (typeof element === "string") {
+        return element;
+      }
+    }
+  }
+
+  return "";
+};
+
 const router = Router();
 
 router.post("/lookup-bct", apiKeyAuth, ContainerController.lookupBct);
@@ -42,9 +58,21 @@ router.get("/huzar/winsad/db/test", async (_req, res) => {
 router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
   const rawMrn = typeof req.params.mrn === "string" ? req.params.mrn : "";
   const normalizedMrn = rawMrn.trim();
-  const rawFileCode =
-    typeof req.query.fileCode === "string" ? req.query.fileCode : "";
+  const rawFileCode = getFirstQueryParam(req.query.fileCode);
   const normalizedFileCode = rawFileCode.trim();
+  const rawLimitValue = getFirstQueryParam(req.query.limit);
+  const parsedLimit =
+    rawLimitValue.trim().length > 0 ? Number.parseInt(rawLimitValue, 10) : Number.NaN;
+  const requestedLimit = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
+  const rawFormatValue = getFirstQueryParam(req.query.format);
+  const normalizedFormat = rawFormatValue.trim().toLowerCase();
+  const preferXml = normalizedFormat === "xml";
+  const effectiveLimit =
+    requestedLimit !== undefined
+      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 50)
+      : preferXml
+        ? 1
+        : undefined;
 
   if (!normalizedMrn) {
     res.status(400).json({
@@ -57,6 +85,8 @@ router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
   try {
     const rows = await fetchWysylkiByMrn(normalizedMrn, {
       fileCode: normalizedFileCode || undefined,
+      limit: requestedLimit,
+      preferXml,
     });
     const enrichedRows = rows.map((row) => ({
       ...row,
@@ -66,6 +96,8 @@ router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
     res.json({
       mrn: normalizedMrn,
       fileCode: normalizedFileCode || undefined,
+      format: preferXml ? "xml" : normalizedFormat || undefined,
+      limit: effectiveLimit,
       count: enrichedRows.length,
       rows: enrichedRows,
     });
