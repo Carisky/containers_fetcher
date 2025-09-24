@@ -42,16 +42,16 @@ const parseNumber = (value: string | undefined, fallback: number): number => {
 };
 
 export const getFirebirdConfig = (): FirebirdConfig => ({
-  host: process.env.FIREBIRD_HOST ?? "127.0.0.1",
-  port: parseNumber(process.env.FIREBIRD_PORT, 3050),
-  database: process.env.FIREBIRD_DATABASE ?? "D:/DaneIB/SADDANEIB.FDB",
-  user: process.env.FIREBIRD_USER ?? "sysdba",
-  password: process.env.FIREBIRD_PASSWORD ?? "masterkey",
+  host: process.env.FIREBIRD_HOST ?? "",
+  port: parseNumber(process.env.FIREBIRD_PORT, 1050),
+  database: process.env.FIREBIRD_DATABASE ?? "",
+  user: process.env.FIREBIRD_USER ?? "",
+  password: process.env.FIREBIRD_PASSWORD ?? "",
   role: process.env.FIREBIRD_ROLE || undefined,
   pageSize: parseNumber(process.env.FIREBIRD_PAGE_SIZE, 8192),
   charset: process.env.FIREBIRD_CHARSET ?? "UTF8",
-  wireCrypt: process.env.FIREBIRD_WIRE_CRYPT ?? "Required",
-  authPlugins: process.env.FIREBIRD_AUTH_PLUGINS ?? "Srp",
+  wireCrypt: process.env.FIREBIRD_WIRE_CRYPT ?? "",
+  authPlugins: process.env.FIREBIRD_AUTH_PLUGINS ?? "",
   pluginName: process.env.FIREBIRD_PLUGIN_NAME || undefined,
   libraryPath: resolveLibraryPath(),
 });
