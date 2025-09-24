@@ -12,6 +12,7 @@ RUN mkdir -p lib/fbclient \
  && npm prune --omit=dev
 
 FROM node:24-slim
+ENV NODE_ENV=production
 WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libfbclient2 \

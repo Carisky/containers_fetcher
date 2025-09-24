@@ -1,3 +1,5 @@
+import "./environment";
+
 const DEFAULT_API_KEY = "dev-local-key";
 
 const parseKeys = (value: string | undefined): string[] => {

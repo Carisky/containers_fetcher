@@ -1,4 +1,5 @@
 import path from "path";
+import "./environment";
 
 export type FirebirdConfig = {
   host: string;
@@ -31,16 +32,26 @@ const resolveLibraryPath = (): string | undefined => {
   return relativeLinuxLibrary;
 };
 
+const parseNumber = (value: string | undefined, fallback: number): number => {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export const getFirebirdConfig = (): FirebirdConfig => ({
-  host: "192.168.1.165",
-  port: 3050,
-  database: "D:/DaneIB/SADDANEIB.FDB",
-  user: "sysdba",
-  password: "Cezar1",
-  charset: "UTF8",
-  pageSize: 8192,
-  wireCrypt: "Required",
-  authPlugins: "Srp",
+  host: process.env.FIREBIRD_HOST ?? "127.0.0.1",
+  port: parseNumber(process.env.FIREBIRD_PORT, 3050),
+  database: process.env.FIREBIRD_DATABASE ?? "D:/DaneIB/SADDANEIB.FDB",
+  user: process.env.FIREBIRD_USER ?? "sysdba",
+  password: process.env.FIREBIRD_PASSWORD ?? "masterkey",
+  role: process.env.FIREBIRD_ROLE || undefined,
+  pageSize: parseNumber(process.env.FIREBIRD_PAGE_SIZE, 8192),
+  charset: process.env.FIREBIRD_CHARSET ?? "UTF8",
+  wireCrypt: process.env.FIREBIRD_WIRE_CRYPT ?? "Required",
+  authPlugins: process.env.FIREBIRD_AUTH_PLUGINS ?? "Srp",
+  pluginName: process.env.FIREBIRD_PLUGIN_NAME || undefined,
   libraryPath: resolveLibraryPath(),
 });
-

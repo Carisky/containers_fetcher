@@ -1,3 +1,4 @@
+import "./config/environment";
 import express from "express";
 import cors from "cors";
 import containerRoutes from "./routes";
