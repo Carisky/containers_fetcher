@@ -59,12 +59,11 @@ const sanitizeXml = (value: string): string => {
   }
 
   const trimmed = value.replace(/^[\s\u0000-\u001F\uFEFF]+/, "");
-  const firstTag = trimmed.indexOf("<");
-  if (firstTag > 0) {
-    return trimmed.slice(firstTag);
-  }
-
-  return trimmed;
+  const xmlDeclarationIndex = trimmed.indexOf("<?xml");
+  const candidate = xmlDeclarationIndex >= 0 ? trimmed.slice(xmlDeclarationIndex) : trimmed;
+  const firstTag = candidate.indexOf("<");
+  const sliced = firstTag > 0 ? candidate.slice(firstTag) : candidate;
+  return sliced.replace(/\u0000+/g, "");
 };
 
 type PathSegment = {
@@ -247,8 +246,13 @@ const extractFieldsFromXml = (
 
     for (const candidatePath of field.paths) {
       try {
-        const candidate = getValueAtPath(parsed, candidatePath);
-        if (candidate === null) {
+        const rawCandidate = getValueAtPath(parsed, candidatePath);
+        if (rawCandidate === null) {
+          continue;
+        }
+
+        const candidate = rawCandidate.trim();
+        if (candidate.length === 0) {
           continue;
         }
 
@@ -306,5 +310,3 @@ export const parseXmlFieldsForWysylkaRow = (
   const entries = wysylkaXmlConfig.map((section) => extractSection(row, section));
   return Object.fromEntries(entries);
 };
-
-
