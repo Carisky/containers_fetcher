@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: Deploy
     env:
-      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/containers_fetcher
+      IMAGE_NAME: ghcr.io/carisky/containers_fetcher
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
