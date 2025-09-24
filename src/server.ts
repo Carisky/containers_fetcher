@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import containerRoutes from "./route/containerRoutes";
+import containerRoutes from "./routes";
 import requestLogger from "./middleware/requestLogger";
 
 const app = express();
