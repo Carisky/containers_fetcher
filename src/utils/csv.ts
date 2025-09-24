@@ -71,7 +71,7 @@ const normalizeCen = (raw?: string): string | undefined => {
   if (!sanitized) return undefined;
 
   const tokens = sanitized
-    .split(/[;,]/)
+    .split(/[;,\s]+/)
     .map(token => token.trim())
     .filter(token => isLikelyCen(token));
 
@@ -79,29 +79,28 @@ const normalizeCen = (raw?: string): string | undefined => {
 };
 
 const pickStatus = (row: Record<string, string | undefined>): string | undefined =>
-  pickValue(row, customsSealKeys) ?? pickValue(row, vetSealKeys) ?? pickValue(row, tStateKeys);
+  pickValue(row, tStateKeys) ?? pickValue(row, customsSealKeys) ?? pickValue(row, vetSealKeys);
+
+const CEN_CONFIDENCE = {
+  NONE: 0,
+  FALLBACK: 1,
+  SECONDARY: 2,
+  PRIMARY: 3,
+} as const;
+
+const NO_CEN_VALUE = "NO";
 
 const pickCen = (
   row: Record<string, string | undefined>,
   status: string | undefined
-): string | undefined => {
-  const candidates = [
-    pickValue(row, cenPrimaryKeys),
-    pickValue(row, inboundModeKeys),
-    pickValue(row, carrierSealKeys),
-    pickValue(row, vetSealKeys),
-    pickValue(row, tStateKeys),
-  ];
-
-  for (const candidate of candidates) {
-    const normalized = normalizeCen(candidate);
-    if (!normalized) continue;
-    if (status && normalized === status) continue;
-    return normalized;
+): { value: string | undefined; confidence: number } => {
+  const primary = normalizeCen(pickValue(row, cenPrimaryKeys));
+  if (primary && (!status || primary !== status)) {
+    return { value: primary, confidence: CEN_CONFIDENCE.PRIMARY };
   }
 
-  return undefined;
-};
+  return { value: NO_CEN_VALUE, confidence: CEN_CONFIDENCE.PRIMARY };
+};;
 
 const isRepeatedHeaderRow = (row: Record<string, string | undefined>): boolean => {
   const firstValue = pickValue(row, containerKeys);
@@ -135,7 +134,9 @@ export function buildContainerInfoFromCsv(csv: string): Record<string, Container
     transformHeader: (header: string) => normalizeHeader(header),
   });
 
-  const result: Record<string, ContainerCsvInfo> = {};
+  type CandidateInfo = ContainerCsvInfo & { cenConfidence: number; hasExplicitNoCen: boolean };
+
+  const result: Record<string, CandidateInfo> = {};
 
   for (const row of data) {
     if (!row || typeof row !== "object") continue;
@@ -145,12 +146,19 @@ export function buildContainerInfoFromCsv(csv: string): Record<string, Container
     if (!cont) continue;
 
     const status = pickStatus(row);
-    const cen = pickCen(row, status);
+    const { value: cenValue, confidence: cenConfidence } = pickCen(row, status);
     const timeIn = pickTimestamp(row, timeInKeys);
     const timeOut = pickTimestamp(row, timeOutKeys);
 
-    const candidate: ContainerCsvInfo = {
-      cen,
+    const isExplicitNoCen = cenValue === NO_CEN_VALUE;
+    const candidate: CandidateInfo = {
+      cen: isExplicitNoCen ? undefined : cenValue,
+      cenConfidence: isExplicitNoCen
+        ? CEN_CONFIDENCE.NONE
+        : cenValue
+          ? cenConfidence
+          : CEN_CONFIDENCE.NONE,
+      hasExplicitNoCen: isExplicitNoCen,
       t_state: status,
       timeIn,
       timeOut,
@@ -167,13 +175,20 @@ export function buildContainerInfoFromCsv(csv: string): Record<string, Container
       result[cont] = {
         ...candidate,
         cen: candidate.cen ?? existing.cen,
+        cenConfidence: candidate.cen ? candidate.cenConfidence : existing.cenConfidence,
+        hasExplicitNoCen: candidate.hasExplicitNoCen || existing.hasExplicitNoCen,
         t_state: candidate.t_state ?? existing.t_state,
       };
       continue;
     }
 
-    if (!existing.cen && candidate.cen) {
-      existing.cen = candidate.cen;
+    if (candidate.cen) {
+      if (!existing.cen || candidate.cenConfidence > existing.cenConfidence) {
+        existing.cen = candidate.cen;
+        existing.cenConfidence = candidate.cenConfidence;
+      }
+    } else if (candidate.hasExplicitNoCen) {
+      existing.hasExplicitNoCen = true;
     }
 
     if (!existing.t_state && candidate.t_state) {
@@ -181,6 +196,16 @@ export function buildContainerInfoFromCsv(csv: string): Record<string, Container
     }
   }
 
-  return result;
+  const output: Record<string, ContainerCsvInfo> = {};
+  for (const [container, info] of Object.entries(result)) {
+    const { cenConfidence: _omit, hasExplicitNoCen, ...rest } = info;
+    if (!rest.cen && hasExplicitNoCen) {
+      rest.cen = NO_CEN_VALUE;
+    }
+    output[container] = rest;
+  }
+
+  return output;
 }
+
 
