@@ -232,13 +232,13 @@ const decodeZlibBuffer = (buffer: Buffer | null, context: string): DecodedXmlRes
   for (const inflate of inflateCandidates) {
     try {
       const output = inflate(buffer);
-      return { decoded: output.toString("utf8"), byteLength: buffer.length };
+      return { decoded: bufferToUtf8OrBase64(output), byteLength: output.length };
     } catch (error) {
       lastError = error;
     }
   }
 
-  const fallbackText = buffer.toString("utf8");
+  const fallbackText = bufferToUtf8OrBase64(buffer);
   if (fallbackText.length > 0) {
     return { decoded: fallbackText, byteLength: buffer.length };
   }
@@ -257,10 +257,72 @@ const bufferToUtf8OrBase64 = (buffer: Buffer): string => {
     return "";
   }
 
+  const hasUtf16LeBom = buffer.length >= 2 && buffer[0] === 0xff && buffer[1] === 0xfe;
+  if (hasUtf16LeBom) {
+    return buffer.slice(2).toString("utf16le");
+  }
+
+  const hasUtf16BeBom = buffer.length >= 2 && buffer[0] === 0xfe && buffer[1] === 0xff;
+  if (hasUtf16BeBom) {
+    const swapped = Buffer.allocUnsafe(buffer.length - 2);
+    for (let i = 2; i < buffer.length; i += 2) {
+      const high = buffer[i];
+      const low = i + 1 < buffer.length ? buffer[i + 1] : 0;
+      swapped[i - 2] = low;
+      swapped[i - 1] = high;
+    }
+    return swapped.toString("utf16le");
+  }
+
+  let zeroCount = 0;
+  let evenZeroCount = 0;
+  let oddZeroCount = 0;
+  for (let i = 0; i < buffer.length; i += 1) {
+    if (buffer[i] === 0) {
+      zeroCount += 1;
+      if (i % 2 === 0) {
+        evenZeroCount += 1;
+      } else {
+        oddZeroCount += 1;
+      }
+    }
+  }
+
+  if (zeroCount > 0) {
+    const zeroRatio = zeroCount / buffer.length;
+    if (zeroRatio >= 0.2) {
+      if (oddZeroCount >= evenZeroCount) {
+        return buffer.toString("utf16le");
+      }
+
+      const swappedNoBom = Buffer.allocUnsafe(buffer.length);
+      for (let i = 0; i < buffer.length; i += 2) {
+        const high = buffer[i];
+        const low = i + 1 < buffer.length ? buffer[i + 1] : 0;
+        swappedNoBom[i] = low;
+        if (i + 1 < buffer.length) {
+          swappedNoBom[i + 1] = high;
+        }
+      }
+      return swappedNoBom.toString("utf16le");
+    }
+  }
+
   const utf8Value = buffer.toString("utf8");
   const reencoded = Buffer.from(utf8Value, "utf8");
   if (reencoded.length === buffer.length && reencoded.equals(buffer)) {
     return utf8Value;
+  }
+
+  const cleanedUtf8 = utf8Value.replace(/ +/g, "");
+  if (cleanedUtf8.includes("<")) {
+    const xmlStart = cleanedUtf8.indexOf("<?xml");
+    if (xmlStart >= 0) {
+      return cleanedUtf8.slice(xmlStart);
+    }
+
+    const firstTagIndex = cleanedUtf8.indexOf("<");
+    return firstTagIndex >= 0 ? cleanedUtf8.slice(firstTagIndex) : cleanedUtf8;
   }
 
   return buffer.toString("base64");
