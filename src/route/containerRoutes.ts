@@ -14,7 +14,7 @@ const getFirstQueryParam = (value: unknown): string => {
   if (typeof value === "string") {
     return value;
   }
-
+  
   if (Array.isArray(value)) {
     for (const element of value) {
       if (typeof element === "string") {
@@ -87,6 +87,7 @@ router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
       fileCode: normalizedFileCode || undefined,
       limit: requestedLimit,
       preferXml,
+      includeDocumentXml: !preferXml,
     });
     const enrichedRows = rows.map((row) => ({
       ...row,

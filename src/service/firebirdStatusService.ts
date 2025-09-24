@@ -78,6 +78,141 @@ const createConnectionContext = (config: FirebirdConfig): ConnectionContext => {
   };
 };
 
+
+const DEFAULT_FIREBIRD_POOL_SIZE = Math.max(
+  1,
+  Number.parseInt(process.env.FIREBIRD_POOL_SIZE ?? "4", 10)
+);
+
+type AttachmentLease = {
+  client: Client;
+  attachment: Attachment;
+};
+
+class FirebirdAttachmentPool {
+  private readonly maxSize: number;
+  private available: AttachmentLease[] = [];
+  private pending: Array<(lease: AttachmentLease) => void> = [];
+  private total = 0;
+  private closed = false;
+
+  constructor(maxSize: number) {
+    this.maxSize = Math.max(1, maxSize);
+  }
+
+  async acquire(): Promise<AttachmentLease> {
+    if (this.closed) {
+      throw new Error("Firebird attachment pool is closed");
+    }
+
+    for (;;) {
+      const lease = this.available.pop();
+      if (!lease) {
+        break;
+      }
+
+      if (this.isLeaseValid(lease)) {
+        return lease;
+      }
+
+      await this.destroyLease(lease);
+    }
+
+    if (this.total < this.maxSize) {
+      const lease = await this.createLease();
+      this.total += 1;
+      return lease;
+    }
+
+    return new Promise<AttachmentLease>((resolve) => {
+      this.pending.push(resolve);
+    });
+  }
+
+  async release(lease: AttachmentLease, recycle = true): Promise<void> {
+    if (this.closed || !recycle || !this.isLeaseValid(lease)) {
+      await this.destroyLease(lease);
+      return;
+    }
+
+    const resolver = this.pending.shift();
+    if (resolver) {
+      resolver(lease);
+      return;
+    }
+
+    this.available.push(lease);
+  }
+
+  async destroyAll(): Promise<void> {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+
+    const tasks = this.available.map((lease) => this.destroyLease(lease));
+    this.available = [];
+    await Promise.allSettled(tasks);
+  }
+
+  private isLeaseValid(lease: AttachmentLease): boolean {
+    return Boolean(lease.attachment?.isValid && lease.client?.isValid);
+  }
+
+  private async createLease(): Promise<AttachmentLease> {
+    const config = getFirebirdConfig();
+    const { client, uri, options } = createConnectionContext(config);
+    const attachment = await client.connect(uri, options);
+    return { client, attachment };
+  }
+
+  private async destroyLease(lease: AttachmentLease): Promise<void> {
+    await disconnectQuietly(lease.attachment);
+    await disposeQuietly(lease.client);
+    if (this.total > 0) {
+      this.total -= 1;
+    }
+  }
+}
+
+const firebirdAttachmentPool = new FirebirdAttachmentPool(DEFAULT_FIREBIRD_POOL_SIZE);
+
+const shutdownFirebirdPool = async () => {
+  await firebirdAttachmentPool.destroyAll().catch((error) => {
+    console.warn(
+      `[firebird] Failed to shut down attachment pool: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  });
+};
+
+process.once("SIGINT", () => {
+  void shutdownFirebirdPool();
+});
+process.once("SIGTERM", () => {
+  void shutdownFirebirdPool();
+});
+
+const withFirebirdAttachment = async <T>(
+  handler: (lease: AttachmentLease) => Promise<T>
+): Promise<T> => {
+  const lease = await firebirdAttachmentPool.acquire();
+  let recycle = true;
+
+  try {
+    const result = await handler(lease);
+    recycle = recycle && lease.attachment.isValid && lease.client.isValid;
+    return result;
+  } catch (error) {
+    recycle = lease.attachment.isValid && lease.client.isValid;
+    throw error;
+  } finally {
+    const finalRecycle = recycle && lease.attachment.isValid && lease.client.isValid;
+    await firebirdAttachmentPool.release(lease, finalRecycle);
+  }
+};
+
 const disconnectQuietly = async (attachment: Attachment | undefined | null) => {
   if (!attachment) {
     return;
@@ -372,23 +507,29 @@ const normalizeColumnValue = async (
 const mapWysylkaRowWithAllColumns = async (
   row: Record<string, unknown>,
   attachment: Attachment,
-  transaction: Transaction
+  transaction: Transaction,
+  options: { includeDocumentXml?: boolean } = {}
 ): Promise<Record<string, unknown>> => {
+  const includeDocumentXml = options.includeDocumentXml ?? true;
+
   const rawId = row["ID_WYSYLKI"];
   const numericId = typeof rawId === "number" ? rawId : Number(rawId);
   const contextId = Number.isFinite(numericId)
     ? numericId.toString()
     : String(rawId ?? "unknown");
 
-  const dokumentBuffer = await readBlobAsBuffer(
-    attachment,
-    transaction,
-    row["DOKUMENTXML"]
-  );
-  const dokument = decodeZlibBuffer(
-    dokumentBuffer,
-    `WYSYLKICELINA.ID_WYSYLKI=${contextId} DOKUMENTXML`
-  );
+  let dokument: DecodedXmlResult = { decoded: null, byteLength: null };
+  if (includeDocumentXml) {
+    const dokumentBuffer = await readBlobAsBuffer(
+      attachment,
+      transaction,
+      row["DOKUMENTXML"]
+    );
+    dokument = decodeZlibBuffer(
+      dokumentBuffer,
+      `WYSYLKICELINA.ID_WYSYLKI=${contextId} DOKUMENTXML`
+    );
+  }
 
   const odpowiedzBuffer = await readBlobAsBuffer(
     attachment,
@@ -442,6 +583,7 @@ type FetchWysylkiByMrnOptions = {
   fileCode?: string;
   limit?: number;
   preferXml?: boolean;
+  includeDocumentXml?: boolean;
 };
 
 export const fetchWysylkiByMrn = async (
@@ -453,133 +595,134 @@ export const fetchWysylkiByMrn = async (
     throw new Error("MRN value must be a non-empty string");
   }
 
-  const config = getFirebirdConfig();
-  const { client, uri, options: connectOptions } = createConnectionContext(config);
+  const preferXml = filterOptions.preferXml === true;
+  const rawLimit =
+    typeof filterOptions.limit === "number" ? filterOptions.limit : Number.NaN;
+  const fallbackLimit = preferXml ? 1 : 10;
+  const limitCandidate = Number.isFinite(rawLimit) ? rawLimit : fallbackLimit;
+  const limit = Math.min(Math.max(Math.trunc(limitCandidate), 1), 50);
+  const normalizedFileCode =
+    typeof filterOptions.fileCode === "string" ? filterOptions.fileCode.trim() : "";
+  const includeDocumentXml =
+    filterOptions.includeDocumentXml ?? true;
 
-  let attachment: Attachment | null = null;
-  let transaction: Transaction | null = null;
-  let resultSet: ResultSet | null = null;
+  const conditions = ["r.NRMRNDOK STARTING WITH ?"];
+  const parameters: unknown[] = [normalizedMrn];
 
-  try {
-    attachment = await client.connect(uri, connectOptions);
-    transaction = await attachment.startTransaction();
+  if (normalizedFileCode) {
+    conditions.push("r.NAZWAPLIKU CONTAINING ?");
+    parameters.push(normalizedFileCode);
+  }
 
-    const preferXml = filterOptions.preferXml === true;
-    const rawLimit =
-      typeof filterOptions.limit === "number" ? filterOptions.limit : Number.NaN;
-    const fallbackLimit = preferXml ? 1 : 10;
-    const limitCandidate = Number.isFinite(rawLimit) ? rawLimit : fallbackLimit;
-    const limit = Math.min(Math.max(Math.trunc(limitCandidate), 1), 50);
-    const normalizedFileCode =
-      typeof filterOptions.fileCode === "string" ? filterOptions.fileCode.trim() : "";
+  if (preferXml) {
+    conditions.push("UPPER(r.NAZWAPLIKU) LIKE ?");
+    parameters.push("%.XML");
+  }
 
-    const conditions = ["r.NRMRNDOK STARTING WITH ?"];
-    const parameters: unknown[] = [normalizedMrn];
+  return withFirebirdAttachment(async ({ attachment }) => {
+    let transaction: Transaction | null = null;
+    let resultSet: ResultSet | null = null;
 
-    if (normalizedFileCode) {
-      conditions.push("r.NAZWAPLIKU CONTAINING ?");
-      parameters.push(normalizedFileCode);
-    }
+    try {
+      transaction = await attachment.startTransaction();
 
-    if (preferXml) {
-      conditions.push("UPPER(r.NAZWAPLIKU) LIKE ?");
-      parameters.push("%.XML");
-    }
-
-    const sql = `
+      const whereClause = conditions.join("\n        AND ");
+      const sql = `
       SELECT FIRST ${limit}
         r.*
       FROM WYSYLKICELINA r
-      WHERE ${conditions.join("\n        AND ")}
+      WHERE ${whereClause}
       ORDER BY r.ID_WYSYLKI DESC
     `;
 
-    resultSet = await attachment.executeQuery(transaction, sql, parameters);
-    const rows = await resultSet.fetchAsObject<Record<string, unknown>>();
-    await resultSet.close();
-    resultSet = null;
+      resultSet = await attachment.executeQuery(transaction, sql, parameters);
+      const rows = await resultSet.fetchAsObject<Record<string, unknown>>();
+      await resultSet.close();
+      resultSet = null;
 
-    if (!attachment || !transaction || !transaction.isValid) {
-      throw new Error(
-        "Firebird transaction ended unexpectedly while decoding WYSYLKICELINA rows"
-      );
+      if (!transaction || !transaction.isValid) {
+        throw new Error(
+          "Firebird transaction ended unexpectedly while decoding WYSYLKICELINA rows"
+        );
+      }
+
+      const decodedRows: Record<string, unknown>[] = [];
+      for (const row of rows) {
+        decodedRows.push(
+          await mapWysylkaRowWithAllColumns(row, attachment, transaction, {
+            includeDocumentXml,
+          })
+        );
+      }
+
+      if (transaction.isValid) {
+        await transaction.commit();
+        transaction = null;
+      }
+
+      return decodedRows;
+    } catch (error) {
+      if (transaction) {
+        await rollbackQuietly(transaction);
+        transaction = null;
+      }
+      throw error;
+    } finally {
+      await closeResultSetQuietly(resultSet);
     }
-
-    const decodedRows: Record<string, unknown>[] = [];
-    for (const row of rows) {
-      decodedRows.push(await mapWysylkaRowWithAllColumns(row, attachment, transaction));
-    }
-
-    if (transaction.isValid) {
-      await transaction.commit();
-    }
-    transaction = null;
-
-    return decodedRows;
-  } catch (error) {
-    await rollbackQuietly(transaction);
-    throw error;
-  } finally {
-    await closeResultSetQuietly(resultSet);
-    await disconnectQuietly(attachment);
-    await disposeQuietly(client);
-  }
+  });
 };
 
 
 export const checkFirebirdConnection = async (): Promise<void> => {
   const config = getFirebirdConfig();
-  const { client, uri, options } = createConnectionContext(config);
+  const uri = buildConnectionUri(config);
+  const options = buildConnectOptions(config);
 
-  let attachment: Attachment | null = null;
-
-  try {
+  await withFirebirdAttachment(async ({ attachment }) => {
     console.log(
       `[firebird] Checking connection to ${uri} with user ${options.username ?? "(default)"}`
     );
 
-    attachment = await client.connect(uri, options);
-  } finally {
-    await disconnectQuietly(attachment);
-    await disposeQuietly(client);
-  }
+    if (!attachment.isValid) {
+      throw new Error("Firebird attachment is not valid");
+    }
+  });
 };
 
 export const fetchCmrSampleRows = async (): Promise<Record<string, unknown>[]> => {
-  const config = getFirebirdConfig();
-  const { client, uri, options } = createConnectionContext(config);
+  return withFirebirdAttachment(async ({ attachment }) => {
+    let transaction: Transaction | null = null;
+    let resultSet: ResultSet | null = null;
 
-  let attachment: Attachment | null = null;
-  let transaction: Transaction | null = null;
-  let resultSet: ResultSet | null = null;
+    try {
+      transaction = await attachment.startTransaction();
 
-  try {
-    attachment = await client.connect(uri, options);
-    transaction = await attachment.startTransaction();
+      resultSet = await attachment.executeQuery(
+        transaction,
+        "SELECT FIRST 10 * FROM CMR"
+      );
 
-    resultSet = await attachment.executeQuery(
-      transaction,
-      "SELECT FIRST 10 * FROM CMR"
-    );
+      const rows = await resultSet.fetchAsObject<Record<string, unknown>>();
+      await resultSet.close();
+      resultSet = null;
 
-    const rows = await resultSet.fetchAsObject<Record<string, unknown>>();
-    await resultSet.close();
-    resultSet = null;
+      if (transaction && transaction.isValid) {
+        await transaction.commit();
+        transaction = null;
+      }
 
-    if (transaction && transaction.isValid) {
-      await transaction.commit();
-      transaction = null;
+      return rows;
+    } catch (error) {
+      if (transaction) {
+        await rollbackQuietly(transaction);
+        transaction = null;
+      }
+      throw error;
+    } finally {
+      await closeResultSetQuietly(resultSet);
     }
-
-    return rows;
-  } catch (error) {
-    await rollbackQuietly(transaction);
-    throw error;
-  } finally {
-    await closeResultSetQuietly(resultSet);
-    await disconnectQuietly(attachment);
-    await disposeQuietly(client);
-  }
+  });
 };
 
 
