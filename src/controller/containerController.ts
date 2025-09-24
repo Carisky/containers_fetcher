@@ -7,36 +7,48 @@ import { mapWithConcurrency } from "../utils/concurrency";
 import { sleep } from "../utils/time";
 
 const DEFAULT_BCT_CONCURRENCY = 5;
+const DEFAULT_CONTAINER_CONCURRENCY = 3;
 
-const parseConcurrency = (value: unknown): number => {
-  if (typeof value !== "string") {
-    return DEFAULT_BCT_CONCURRENCY;
+const parseConcurrency = (
+  raw: unknown,
+  fallback: number
+): number => {
+  if (typeof raw !== "string") {
+    return fallback;
   }
 
-  const parsed = Number.parseInt(value, 10);
+  const parsed = Number.parseInt(raw, 10);
   if (!Number.isFinite(parsed)) {
-    return DEFAULT_BCT_CONCURRENCY;
+    return fallback;
   }
 
-  return parsed > 0 ? parsed : DEFAULT_BCT_CONCURRENCY;
+  return parsed > 0 ? parsed : fallback;
+};
+
+const sanitizeContainers = (containers: unknown): string[] => {
+  if (!Array.isArray(containers)) {
+    return [];
+  }
+
+  const normalized = containers
+    .map((value) => String(value ?? "").trim())
+    .filter((value) => value.length > 0);
+
+  return normalized;
 };
 
 export class ContainerController {
   static async lookupBct(req: Request, res: Response) {
-    const { containers } = req.body as { containers: string[] };
-    if (!Array.isArray(containers) || containers.length === 0) {
-      return res.status(400).json({ error: "No containers provided" });
-    }
-
-    const normalized = containers
-      .map((c) => String(c ?? "").trim())
-      .filter((c) => c.length > 0);
-
+    const normalized = sanitizeContainers((req.body as { containers?: unknown }).containers);
     if (normalized.length === 0) {
       return res.status(400).json({ error: "No containers provided" });
     }
 
-    const concurrency = parseConcurrency(process.env.BCT_LOOKUP_CONCURRENCY);
+    const concurrency = parseConcurrency(
+      process.env.BCT_LOOKUP_CONCURRENCY,
+      DEFAULT_BCT_CONCURRENCY
+    );
+
     const results = await mapWithConcurrency(normalized, concurrency, async (cont) => {
       const { cen, status } = await fetchBctForContainer(cont);
       return { cont, cen, status };
@@ -53,21 +65,30 @@ export class ContainerController {
   }
 
   static async lookup(req: Request, res: Response) {
-    const { containers } = req.body as { containers: string[] };
+    const normalized = sanitizeContainers((req.body as { containers?: unknown }).containers);
+
     const wantT =
       String(
         req.query?.t_status ?? (req.body as any)?.t_status ?? ""
       ).toLowerCase() === "true" || (req.body as any)?.t_status === true;
 
-    if (!Array.isArray(containers) || containers.length === 0) {
+    if (normalized.length === 0) {
       return res.status(400).json({ error: "No containers provided" });
     }
 
-    const infoMap: Record<string, { cen?: string; t_state?: string }> = {};
-    for (const cont of containers) {
+    const concurrency = parseConcurrency(
+      process.env.CONTAINER_LOOKUP_CONCURRENCY,
+      DEFAULT_CONTAINER_CONCURRENCY
+    );
+
+    const results = await mapWithConcurrency(normalized, concurrency, async (cont) => {
       const info = await fetchContainerInfo(cont);
+      return { cont, info };
+    });
+
+    const infoMap: Record<string, { cen?: string; t_state?: string }> = {};
+    for (const { info } of results) {
       Object.assign(infoMap, info);
-      await sleep(2000);
     }
 
     if (!wantT) {
