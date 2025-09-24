@@ -5,9 +5,14 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    environment: Deploy
     env:
       IMAGE_NAME: ghcr.io/${{ github.repository }}
     steps:
@@ -44,8 +49,8 @@ jobs:
           script: |
             set -e
             echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ghcr.io -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
-            docker stop containers_fetcher || true
-            docker rm containers_fetcher || true
+            docker stop containers-fetcher || true
+            docker rm containers-fetcher || true
             docker pull ${{ env.IMAGE_NAME }}:latest
             docker image prune -f --filter "dangling=true"
-            docker run -d --name containers_fetcher --restart unless-stopped -p 3400:3400 ${{ env.IMAGE_NAME }}:latest
+            docker run -d --name containers-fetcher --restart unless-stopped -p 3400:3400 ${{ env.IMAGE_NAME }}:latest
