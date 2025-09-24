@@ -1,37 +1,15 @@
 import { Router } from "express";
-import { ContainerController } from "../controller/containerController";
 import {
   checkFirebirdConnection,
   fetchCmrSampleRows,
   fetchWysylkiByMrn,
 } from "../service/firebird";
-import apiKeyAuth from "../middleware/apiKeyAuth";
-import basicAuth from "../middleware/basicAuth";
 import { parseXmlFieldsForWysylkaRow } from "../utils/wysylkaXml";
-import { getRequestLogs } from "../utils/requestLogFile";
+import { getFirstQueryParam } from "./helpers/queryParams";
 
-const getFirstQueryParam = (value: unknown): string => {
-  if (typeof value === "string") {
-    return value;
-  }
-  
-  if (Array.isArray(value)) {
-    for (const element of value) {
-      if (typeof element === "string") {
-        return element;
-      }
-    }
-  }
+const firebirdRoutes = Router();
 
-  return "";
-};
-
-const router = Router();
-
-router.post("/lookup-bct", apiKeyAuth, ContainerController.lookupBct);
-router.post("/lookup", apiKeyAuth, ContainerController.lookup);
-
-router.get("/huzar/winsad/db/status", async (_req, res) => {
+firebirdRoutes.get("/status", async (_req, res) => {
   try {
     await checkFirebirdConnection();
     res.json({ status: "ok" });
@@ -43,7 +21,7 @@ router.get("/huzar/winsad/db/status", async (_req, res) => {
   }
 });
 
-router.get("/huzar/winsad/db/test", async (_req, res) => {
+firebirdRoutes.get("/test", async (_req, res) => {
   try {
     const rows = await fetchCmrSampleRows();
     res.json({ rows });
@@ -55,7 +33,7 @@ router.get("/huzar/winsad/db/test", async (_req, res) => {
   }
 });
 
-router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
+firebirdRoutes.get("/wysylki/mrn/:mrn", async (req, res) => {
   const rawMrn = typeof req.params.mrn === "string" ? req.params.mrn : "";
   const normalizedMrn = rawMrn.trim();
   const rawFileCode = getFirstQueryParam(req.query.fileCode);
@@ -110,13 +88,4 @@ router.get("/huzar/winsad/db/wysylki/mrn/:mrn", async (req, res) => {
   }
 });
 
-router.get("/utils/logs", basicAuth, async (_req, res, next) => {
-  try {
-    const logs = await getRequestLogs();
-    res.json({ logs });
-  } catch (error) {
-    next(error);
-  }
-});
-
-export default router;
+export default firebirdRoutes;
