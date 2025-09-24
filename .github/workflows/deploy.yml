@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: Deploy
     env:
-      IMAGE_NAME: ghcr.io/carisky/containers_fetcher
+      IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/containers_fetcher
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,6 +49,24 @@ jobs:
           script: |
             set -e
             echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ghcr.io -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
+            ENV_FILE=/tmp/containers-fetcher.env
+            cat <<EOF > "$ENV_FILE"
+PORT=${{ secrets.APP_PORT }}
+API_KEY_HEADER=${{ secrets.API_KEY_HEADER }}
+API_KEYS=${{ secrets.API_KEYS }}
+FIREBIRD_HOST=${{ secrets.FIREBIRD_HOST }}
+FIREBIRD_PORT=${{ secrets.FIREBIRD_PORT }}
+FIREBIRD_DATABASE=${{ secrets.FIREBIRD_DATABASE }}
+FIREBIRD_USER=${{ secrets.FIREBIRD_USER }}
+FIREBIRD_PASSWORD=${{ secrets.FIREBIRD_PASSWORD }}
+FIREBIRD_ROLE=${{ secrets.FIREBIRD_ROLE }}
+FIREBIRD_PAGE_SIZE=${{ secrets.FIREBIRD_PAGE_SIZE }}
+FIREBIRD_CHARSET=${{ secrets.FIREBIRD_CHARSET }}
+FIREBIRD_WIRE_CRYPT=${{ secrets.FIREBIRD_WIRE_CRYPT }}
+FIREBIRD_AUTH_PLUGINS=${{ secrets.FIREBIRD_AUTH_PLUGINS }}
+FIREBIRD_PLUGIN_NAME=${{ secrets.FIREBIRD_PLUGIN_NAME }}
+FIREBIRD_LIBRARY_PATH=${{ secrets.FIREBIRD_LIBRARY_PATH }}
+EOF
             docker stop containers-fetcher || true
             docker rm containers-fetcher || true
             docker pull ${{ env.IMAGE_NAME }}:latest
@@ -56,20 +74,6 @@ jobs:
             docker run -d \
               --name containers-fetcher \
               --restart unless-stopped \
+              --env-file "$ENV_FILE" \
               -p 3400:3400 \
-              -e PORT=${{ secrets.APP_PORT }} \
-              -e API_KEY_HEADER=${{ secrets.API_KEY_HEADER }} \
-              -e API_KEYS=${{ secrets.API_KEYS }} \
-              -e FIREBIRD_HOST=${{ secrets.FIREBIRD_HOST }} \
-              -e FIREBIRD_PORT=${{ secrets.FIREBIRD_PORT }} \
-              -e FIREBIRD_DATABASE=${{ secrets.FIREBIRD_DATABASE }} \
-              -e FIREBIRD_USER=${{ secrets.FIREBIRD_USER }} \
-              -e FIREBIRD_PASSWORD=${{ secrets.FIREBIRD_PASSWORD }} \
-              -e FIREBIRD_ROLE=${{ secrets.FIREBIRD_ROLE }} \
-              -e FIREBIRD_PAGE_SIZE=${{ secrets.FIREBIRD_PAGE_SIZE }} \
-              -e FIREBIRD_CHARSET=${{ secrets.FIREBIRD_CHARSET }} \
-              -e FIREBIRD_WIRE_CRYPT=${{ secrets.FIREBIRD_WIRE_CRYPT }} \
-              -e FIREBIRD_AUTH_PLUGINS=${{ secrets.FIREBIRD_AUTH_PLUGINS }} \
-              -e FIREBIRD_PLUGIN_NAME=${{ secrets.FIREBIRD_PLUGIN_NAME }} \
-              -e FIREBIRD_LIBRARY_PATH=${{ secrets.FIREBIRD_LIBRARY_PATH }} \
               ${{ env.IMAGE_NAME }}:latest
