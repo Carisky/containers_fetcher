@@ -51,22 +51,22 @@ jobs:
             echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ghcr.io -u "${{ secrets.REGISTRY_USERNAME }}" --password-stdin
             ENV_FILE=/tmp/containers-fetcher.env
             cat <<EOF > "$ENV_FILE"
-PORT=${{ secrets.APP_PORT }}
-API_KEY_HEADER=${{ secrets.API_KEY_HEADER }}
-API_KEYS=${{ secrets.API_KEYS }}
-FIREBIRD_HOST=${{ secrets.FIREBIRD_HOST }}
-FIREBIRD_PORT=${{ secrets.FIREBIRD_PORT }}
-FIREBIRD_DATABASE=${{ secrets.FIREBIRD_DATABASE }}
-FIREBIRD_USER=${{ secrets.FIREBIRD_USER }}
-FIREBIRD_PASSWORD=${{ secrets.FIREBIRD_PASSWORD }}
-FIREBIRD_ROLE=${{ secrets.FIREBIRD_ROLE }}
-FIREBIRD_PAGE_SIZE=${{ secrets.FIREBIRD_PAGE_SIZE }}
-FIREBIRD_CHARSET=${{ secrets.FIREBIRD_CHARSET }}
-FIREBIRD_WIRE_CRYPT=${{ secrets.FIREBIRD_WIRE_CRYPT }}
-FIREBIRD_AUTH_PLUGINS=${{ secrets.FIREBIRD_AUTH_PLUGINS }}
-FIREBIRD_PLUGIN_NAME=${{ secrets.FIREBIRD_PLUGIN_NAME }}
-FIREBIRD_LIBRARY_PATH=${{ secrets.FIREBIRD_LIBRARY_PATH }}
-EOF
+            PORT=${{ secrets.APP_PORT }}
+            API_KEY_HEADER=${{ secrets.API_KEY_HEADER }}
+            API_KEYS=${{ secrets.API_KEYS }}
+            FIREBIRD_HOST=${{ secrets.FIREBIRD_HOST }}
+            FIREBIRD_PORT=${{ secrets.FIREBIRD_PORT }}
+            FIREBIRD_DATABASE=${{ secrets.FIREBIRD_DATABASE }}
+            FIREBIRD_USER=${{ secrets.FIREBIRD_USER }}
+            FIREBIRD_PASSWORD=${{ secrets.FIREBIRD_PASSWORD }}
+            FIREBIRD_ROLE=${{ secrets.FIREBIRD_ROLE }}
+            FIREBIRD_PAGE_SIZE=${{ secrets.FIREBIRD_PAGE_SIZE }}
+            FIREBIRD_CHARSET=${{ secrets.FIREBIRD_CHARSET }}
+            FIREBIRD_WIRE_CRYPT=${{ secrets.FIREBIRD_WIRE_CRYPT }}
+            FIREBIRD_AUTH_PLUGINS=${{ secrets.FIREBIRD_AUTH_PLUGINS }}
+            FIREBIRD_PLUGIN_NAME=${{ secrets.FIREBIRD_PLUGIN_NAME }}
+            FIREBIRD_LIBRARY_PATH=${{ secrets.FIREBIRD_LIBRARY_PATH }}
+            EOF
             docker stop containers-fetcher || true
             docker rm containers-fetcher || true
             docker pull ${{ env.IMAGE_NAME }}:latest
