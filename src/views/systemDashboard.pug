@@ -1,0 +1,1013 @@
+﻿
+doctype html
+html(lang="en")
+  head
+    meta(charset="UTF-8")
+    meta(http-equiv="X-UA-Compatible", content="IE=edge")
+    meta(name="viewport", content="width=device-width, initial-scale=1")
+    title System Monitor
+    style.
+      :root {
+        color-scheme: dark;
+        --bg0: #040712;
+        --bg1: #060d22;
+        --bg2: rgba(12, 22, 54, 0.7);
+        --bg-card: rgba(12, 22, 54, 0.85);
+        --border: rgba(69, 128, 255, 0.25);
+        --border-strong: rgba(69, 128, 255, 0.45);
+        --grid-line: rgba(46, 64, 120, 0.35);
+        --accent: #6dcff6;
+        --accent-strong: #63f6c6;
+        --text: #eef7ff;
+        --muted: rgba(203, 236, 255, 0.6);
+        --danger: #ff7c99;
+        --success: #56f0b8;
+        --warning: #ffc069;
+      }
+
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Segoe UI", "Inter", system-ui, sans-serif;
+        color: var(--text);
+        background: radial-gradient(circle at 15% 15%, rgba(75, 112, 255, 0.08), transparent 55%),
+          radial-gradient(circle at 85% 20%, rgba(99, 246, 198, 0.1), transparent 45%),
+          linear-gradient(135deg, var(--bg0), var(--bg1));
+        position: relative;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(var(--grid-line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+        background-size: 80px 80px;
+        opacity: 0.35;
+      }
+
+      main {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 48px 28px 64px;
+        position: relative;
+        z-index: 1;
+      }
+
+      header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 28px;
+      }
+
+      .title-block {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 32px;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+      }
+
+      .subtitle {
+        margin: 0;
+        font-size: 14px;
+        color: var(--muted);
+        letter-spacing: 0.8px;
+      }
+
+      .status-stack {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .status-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: rgba(40, 78, 160, 0.2);
+        font-size: 12px;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+      }
+
+      .status-chip strong {
+        color: var(--accent);
+        font-weight: 600;
+      }
+
+      .status-line {
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 18px;
+      }
+
+      .status-line.error {
+        color: var(--danger);
+      }
+
+      .dashboard-grid {
+        display: grid;
+        gap: 20px;
+      }
+
+      .dashboard-grid.primary {
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        margin-bottom: 24px;
+      }
+
+      .dashboard-grid.secondary {
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        margin-bottom: 24px;
+      }
+
+      .card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 22px;
+        position: relative;
+        overflow: hidden;
+        backdrop-filter: blur(14px);
+        box-shadow: 0 20px 45px rgba(8, 10, 28, 0.55);
+      }
+
+      .card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(135deg, rgba(99, 246, 198, 0.12), rgba(109, 207, 246, 0.06));
+        opacity: 0;
+        transition: opacity 0.3s ease;
+      }
+
+      .card:hover::before {
+        opacity: 1;
+      }
+
+      .card-content {
+        position: relative;
+        z-index: 1;
+      }
+
+      .card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .card h2 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      .metric-primary {
+        font-size: 36px;
+        font-weight: 700;
+        margin: 10px 0 6px;
+      }
+
+      .metric-primary span {
+        font-size: 18px;
+        color: var(--muted);
+        margin-left: 8px;
+      }
+
+      .card-subline {
+        font-size: 13px;
+        color: var(--muted);
+        letter-spacing: 0.5px;
+        margin-bottom: 6px;
+      }
+
+      .badge-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 10px;
+        background: rgba(99, 246, 198, 0.08);
+        border: 1px solid rgba(99, 246, 198, 0.15);
+        font-size: 12px;
+        letter-spacing: 0.5px;
+      }
+
+      .badge.muted {
+        background: rgba(109, 207, 246, 0.06);
+        border-color: rgba(109, 207, 246, 0.18);
+        color: var(--muted);
+      }
+
+      .badge.danger {
+        background: rgba(255, 124, 153, 0.12);
+        border-color: rgba(255, 124, 153, 0.28);
+        color: #ffcbd8;
+      }
+
+      .badge.warning {
+        background: rgba(255, 192, 105, 0.12);
+        border-color: rgba(255, 192, 105, 0.32);
+        color: #ffe1b4;
+      }
+
+      .badge.success {
+        background: rgba(86, 240, 184, 0.12);
+        border-color: rgba(86, 240, 184, 0.24);
+        color: #b4ffe4;
+      }
+      .core-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .core-card {
+        border: 1px solid rgba(99, 246, 198, 0.12);
+        background: rgba(12, 22, 54, 0.7);
+        border-radius: 12px;
+        padding: 10px 12px;
+      }
+
+      .core-title {
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 6px;
+        letter-spacing: 0.4px;
+      }
+
+      .core-bar {
+        position: relative;
+        height: 14px;
+        border-radius: 999px;
+        background: rgba(109, 207, 246, 0.12);
+        overflow: hidden;
+      }
+
+      .core-bar-fill {
+        position: absolute;
+        inset: 0;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(109, 207, 246, 0.65), rgba(99, 246, 198, 0.95));
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        padding-right: 6px;
+        font-size: 11px;
+      }
+
+      .stat-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .stat-item {
+        border: 1px solid rgba(109, 207, 246, 0.14);
+        padding: 12px 14px;
+        border-radius: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        background: rgba(5, 13, 28, 0.45);
+      }
+
+      .stat-title {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+      }
+
+      .stat-meta {
+        font-size: 12px;
+        color: var(--muted);
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .progress-shell {
+        position: relative;
+        height: 10px;
+        background: rgba(12, 30, 70, 0.8);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(90deg, rgba(109, 207, 246, 0.6), rgba(99, 246, 198, 0.9));
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 6px;
+      }
+
+      thead {
+        text-align: left;
+        color: var(--muted);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+        font-size: 11px;
+      }
+
+      th, td {
+        padding: 10px 12px;
+        border-bottom: 1px solid rgba(109, 207, 246, 0.15);
+      }
+
+      tbody tr:hover {
+        background: rgba(99, 246, 198, 0.06);
+      }
+
+      .table-status {
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.4px;
+      }
+
+      .table-status.error {
+        color: var(--danger);
+      }
+
+      .logs-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      hr.divider {
+        border: none;
+        border-top: 1px dashed rgba(109, 207, 246, 0.2);
+        margin: 16px 0;
+      }
+
+      @media (max-width: 720px) {
+        main {
+          padding: 32px 18px 48px;
+        }
+
+        h1 {
+          font-size: 26px;
+        }
+
+        .metric-primary {
+          font-size: 30px;
+        }
+      }
+  body
+    main
+      header
+        .title-block
+          h1 System Monitor
+          p.subtitle Realtime infrastructure telemetry
+        .status-stack
+          span.status-chip#platform Host: --
+          span.status-chip#environment Env: --
+          span.status-chip#last-updated Updated: waiting
+      #metrics-status.status-line
+      section.dashboard-grid.primary
+        article.card
+          .card-content
+            .card-header
+              h2 CPU
+              span.badge#cpu-temp-badge Temp: n/a
+            .metric-primary#cpu-average --
+            .card-subline#cpu-meta
+            .card-subline#cpu-speeds
+            .core-grid#cpu-cores
+        article.card
+          .card-content
+            .card-header
+              h2 Memory
+              span.badge#memory-used-badge Usage: n/a
+            .badge-group
+              span.badge#memory-used
+              span.badge#memory-free
+              span.badge.muted#memory-total
+            h3.card-subline Process Memory
+            .badge-group
+              span.badge#process-memory
+            h3.card-subline Swap
+            .badge-group
+              span.badge#swap-memory
+        article.card
+          .card-content
+            .card-header
+              h2 Uptime & Load
+            .badge-group
+              span.badge#uptime-system System uptime: n/a
+              span.badge#uptime-process Process uptime: n/a
+            .badge-group
+              span.badge#load-average Load: n/a
+              span.badge#cpu-speed-range Speed: n/a
+            .badge-group
+              span.badge.muted#version-info Node: n/a
+      section.dashboard-grid.secondary
+        article.card
+          .card-content
+            .card-header
+              h2 Storage
+            ul.stat-list#storage-list
+        article.card
+          .card-content
+            .card-header
+              h2 Network
+            ul.stat-list#network-list
+        article.card
+          .card-content
+            .card-header
+              h2 GPU
+            ul.stat-list#gpu-list
+            hr.divider
+            .card-header
+              h2 Battery
+            ul.stat-list#battery-list
+        article.card
+          .card-content
+            .card-header
+              h2 Logs Summary
+            .badge-group#logs-summary
+      article.card
+        .card-content
+          .logs-card-header
+            h2(style="margin: 0;") Recent Requests
+            span.table-status#logs-status
+          table#logs-table
+            thead
+              tr
+                th Time
+                th Method
+                th Status
+                th Duration
+                th URL
+            tbody
+    script.
+      window.__INITIAL_METRICS__ = !{initialMetricsJson};
+      window.__INITIAL_LOGS__ = !{initialLogsJson};
+    script.
+      (function () {
+        var metricsEndpoint = "/utils/metrics";
+        var logsEndpoint = "/utils/logs";
+        var metricsIntervalMs = 5000;
+        var logsIntervalMs = 10000;
+        var maxLogRows = 50;
+
+        var cpuAverageEl = document.getElementById("cpu-average");
+        var cpuMetaEl = document.getElementById("cpu-meta");
+        var cpuSpeedsEl = document.getElementById("cpu-speeds");
+        var cpuSpeedRangeEl = document.getElementById("cpu-speed-range");
+        var cpuTempBadgeEl = document.getElementById("cpu-temp-badge");
+        var cpuCoresEl = document.getElementById("cpu-cores");
+
+        var memoryUsedBadgeEl = document.getElementById("memory-used-badge");
+        var memoryUsedEl = document.getElementById("memory-used");
+        var memoryFreeEl = document.getElementById("memory-free");
+        var memoryTotalEl = document.getElementById("memory-total");
+        var swapMemoryEl = document.getElementById("swap-memory");
+        var processMemoryEl = document.getElementById("process-memory");
+
+        var uptimeSystemEl = document.getElementById("uptime-system");
+        var uptimeProcessEl = document.getElementById("uptime-process");
+        var loadAverageEl = document.getElementById("load-average");
+        var versionInfoEl = document.getElementById("version-info");
+
+        var storageListEl = document.getElementById("storage-list");
+        var networkListEl = document.getElementById("network-list");
+        var gpuListEl = document.getElementById("gpu-list");
+        var batteryListEl = document.getElementById("battery-list");
+
+        var logsSummaryEl = document.getElementById("logs-summary");
+        var logsTableBody = document.querySelector("#logs-table tbody");
+        var platformEl = document.getElementById("platform");
+        var environmentEl = document.getElementById("environment");
+        var lastUpdatedEl = document.getElementById("last-updated");
+        var metricsStatusEl = document.getElementById("metrics-status");
+        var logsStatusEl = document.getElementById("logs-status");
+
+        var latestLogsStamp = null;
+        var initialMetrics = window.__INITIAL_METRICS__;
+        var initialLogs = window.__INITIAL_LOGS__;
+        delete window.__INITIAL_METRICS__;
+        delete window.__INITIAL_LOGS__;
+
+        var fetchOptions = { cache: "no-store", credentials: "include" };
+
+        function setStatus(el, message, isError) {
+          if (!el) {
+            return;
+          }
+          el.textContent = message || "";
+          if (!message) {
+            el.classList.remove("error");
+            return;
+          }
+          if (isError) {
+            el.classList.add("error");
+          } else {
+            el.classList.remove("error");
+          }
+        }
+
+        function formatBytes(value) {
+          if (value === undefined || value === null) {
+            return "n/a";
+          }
+          var abs = Math.abs(value);
+          if (abs < 1024) {
+            return value + " B";
+          }
+          var units = ["KB", "MB", "GB", "TB", "PB"];
+          var index = -1;
+          do {
+            value = value / 1024;
+            index++;
+          } while (Math.abs(value) >= 1024 && index < units.length - 1);
+          return value.toFixed(1) + " " + units[index];
+        }
+
+        function formatPercent(value, digits) {
+          if (value === undefined || value === null) {
+            return "n/a";
+          }
+          var fixed = typeof digits === "number" ? value.toFixed(digits) : value.toFixed(1);
+          return fixed + "%";
+        }
+
+        function formatDuration(seconds) {
+          if (seconds === undefined || seconds === null) {
+            return "n/a";
+          }
+          var total = Math.max(0, Math.floor(seconds));
+          var days = Math.floor(total / 86400);
+          var hours = Math.floor((total % 86400) / 3600);
+          var minutes = Math.floor((total % 3600) / 60);
+          var secs = total % 60;
+          var parts = [];
+          if (days) parts.push(days + "d");
+          if (hours) parts.push(hours + "h");
+          if (minutes) parts.push(minutes + "m");
+          if (!days && !hours) parts.push(secs + "s");
+          return parts.join(" ") || "0s";
+        }
+
+        function formatTemperature(value) {
+          if (value === undefined || value === null || Number.isNaN(value)) {
+            return "n/a";
+          }
+          return value.toFixed(1) + "°C";
+        }
+
+        function createBadge(text, className) {
+          var badge = document.createElement("span");
+          badge.className = "badge" + (className ? " " + className : "");
+          badge.textContent = text;
+          return badge;
+        }
+
+        function clearAndFill(container, items) {
+          if (!container) {
+            return;
+          }
+          container.innerHTML = "";
+          items.forEach(function (item) {
+            container.appendChild(item);
+          });
+        }
+        function renderCpu(metrics) {
+          if (!metrics) {
+            return;
+          }
+          if (cpuAverageEl) {
+            cpuAverageEl.textContent = metrics.cpu.averagePercent.toFixed(1) + "%";
+          }
+          if (cpuMetaEl) {
+            var hardware = metrics.hardware && metrics.hardware.cpu ? metrics.hardware.cpu : {};
+            var brand = hardware.brand || metrics.platform.cpuModel || "CPU";
+            var cores = hardware.physicalCores || metrics.platform.physicalCpuCount || metrics.cpu.perCore.length;
+            var logical = metrics.platform.cpuCount;
+            cpuMetaEl.textContent = brand + " • " + cores + " physical • " + logical + " logical";
+          }
+          if (cpuSpeedsEl || cpuSpeedRangeEl) {
+            var speeds = metrics.hardware && metrics.hardware.cpu ? metrics.hardware.cpu : {};
+            var speedPieces = [];
+            if (speeds.speedGhz) speedPieces.push("avg " + speeds.speedGhz.toFixed(2) + " GHz");
+            if (speeds.speedMinGhz) speedPieces.push("min " + speeds.speedMinGhz.toFixed(2) + " GHz");
+            if (speeds.speedMaxGhz) speedPieces.push("max " + speeds.speedMaxGhz.toFixed(2) + " GHz");
+            var speedText = speedPieces.join("  |  ");
+            if (cpuSpeedsEl) {
+              cpuSpeedsEl.textContent = speedText;
+            }
+            if (cpuSpeedRangeEl) {
+              cpuSpeedRangeEl.textContent = speedText ? "Speed: " + speedText : "Speed: n/a";
+            }
+          }
+          var temperature = metrics.hardware && metrics.hardware.cpu && metrics.hardware.cpu.temperature ? metrics.hardware.cpu.temperature : null;
+          if (cpuTempBadgeEl) {
+            var main = temperature && temperature.mainC;
+            cpuTempBadgeEl.textContent = "Temp: " + formatTemperature(main);
+            cpuTempBadgeEl.classList.remove("danger", "warning", "success");
+            if (main !== undefined && main !== null) {
+              if (main >= 85) {
+                cpuTempBadgeEl.classList.add("danger");
+              } else if (main >= 70) {
+                cpuTempBadgeEl.classList.add("warning");
+              } else {
+                cpuTempBadgeEl.classList.add("success");
+              }
+            }
+          }
+          if (cpuCoresEl) {
+            cpuCoresEl.innerHTML = "";
+            metrics.cpu.perCore.forEach(function (core) {
+              var card = document.createElement("div");
+              card.className = "core-card";
+              var title = document.createElement("div");
+              title.className = "core-title";
+              title.textContent = "Core " + (core.coreIndex + 1);
+              var bar = document.createElement("div");
+              bar.className = "core-bar";
+              var fill = document.createElement("div");
+              fill.className = "core-bar-fill";
+              var percent = Math.max(0, Math.min(core.usagePercent, 100));
+              fill.style.width = percent.toFixed(1) + "%";
+              fill.textContent = core.usagePercent.toFixed(0) + "%";
+              bar.appendChild(fill);
+              card.appendChild(title);
+              card.appendChild(bar);
+              cpuCoresEl.appendChild(card);
+            });
+          }
+        }
+        function renderMemory(metrics) {
+          if (!metrics) {
+            return;
+          }
+          if (memoryUsedBadgeEl) {
+            memoryUsedBadgeEl.textContent = "Usage: " + formatPercent(metrics.memory.system.usedPercent, 1);
+          }
+          if (memoryUsedEl) {
+            memoryUsedEl.textContent = "Used " + formatBytes(metrics.memory.system.usedBytes);
+          }
+          if (memoryFreeEl) {
+            memoryFreeEl.textContent = "Free " + formatBytes(metrics.memory.system.freeBytes);
+          }
+          if (memoryTotalEl) {
+            memoryTotalEl.textContent = "Total " + formatBytes(metrics.memory.system.totalBytes);
+          }
+          if (processMemoryEl) {
+            var pm = metrics.memory.process;
+            processMemoryEl.textContent =
+              "RSS " + formatBytes(pm.rss) + " • Heap " + formatBytes(pm.heapUsed) + " of " + formatBytes(pm.heapTotal);
+          }
+          if (swapMemoryEl) {
+            var swap = metrics.hardware && metrics.hardware.memory ? metrics.hardware.memory.swap : undefined;
+            if (!swap) {
+              swapMemoryEl.textContent = "Swap unavailable";
+              swapMemoryEl.classList.add("muted");
+            } else {
+              swapMemoryEl.classList.remove("muted");
+              swapMemoryEl.textContent =
+                "Swap " + formatBytes(swap.usedBytes) + " of " + formatBytes(swap.totalBytes) +
+                " (" + formatPercent(swap.usedPercent, 1) + ")";
+            }
+          }
+        }
+
+        function renderUptime(metrics) {
+          if (!metrics) {
+            return;
+          }
+          if (uptimeSystemEl) {
+            uptimeSystemEl.textContent = "System uptime: " + formatDuration(metrics.uptime.systemSeconds);
+          }
+          if (uptimeProcessEl) {
+            uptimeProcessEl.textContent = "Process uptime: " + formatDuration(metrics.uptime.processSeconds);
+          }
+          if (loadAverageEl) {
+            loadAverageEl.textContent =
+              "Load: 1m " + metrics.loadAverage.one.toFixed(2) +
+              " • 5m " + metrics.loadAverage.five.toFixed(2) +
+              " • 15m " + metrics.loadAverage.fifteen.toFixed(2);
+          }
+          if (versionInfoEl && metrics.versions && metrics.versions.node) {
+            versionInfoEl.textContent = "Node: " + metrics.versions.node;
+          }
+        }
+        function renderStorage(storage) {
+          if (!storageListEl) {
+            return;
+          }
+          storageListEl.innerHTML = "";
+          if (!storage || storage.length === 0) {
+            var empty = document.createElement("li");
+            empty.className = "stat-item";
+            empty.textContent = "No storage data.";
+            storageListEl.appendChild(empty);
+            return;
+          }
+          storage.forEach(function (volume) {
+            var item = document.createElement("li");
+            item.className = "stat-item";
+            var title = document.createElement("div");
+            title.className = "stat-title";
+            title.textContent = volume.mount || volume.fs;
+            var meta = document.createElement("div");
+            meta.className = "stat-meta";
+            meta.textContent = formatBytes(volume.usedBytes) + " / " + formatBytes(volume.sizeBytes) +
+              " • " + volume.usedPercent.toFixed(1) + "%";
+            var barShell = document.createElement("div");
+            barShell.className = "progress-shell";
+            var barFill = document.createElement("div");
+            barFill.className = "progress-fill";
+            barFill.style.width = Math.max(0, Math.min(volume.usedPercent, 100)).toFixed(1) + "%";
+            barShell.appendChild(barFill);
+            item.appendChild(title);
+            item.appendChild(meta);
+            item.appendChild(barShell);
+            storageListEl.appendChild(item);
+          });
+        }
+
+        function renderNetwork(network) {
+          if (!networkListEl) {
+            return;
+          }
+          networkListEl.innerHTML = "";
+          if (!network || network.length === 0) {
+            var empty = document.createElement("li");
+            empty.className = "stat-item";
+            empty.textContent = "No network data.";
+            networkListEl.appendChild(empty);
+            return;
+          }
+          network.forEach(function (iface) {
+            var item = document.createElement("li");
+            item.className = "stat-item";
+            var title = document.createElement("div");
+            title.className = "stat-title";
+            title.textContent = iface.iface + (iface.operstate ? " • " + iface.operstate : "");
+            var meta = document.createElement("div");
+            meta.className = "stat-meta";
+            meta.textContent =
+              "RX " + formatBytes(iface.rxBytes) + " • TX " + formatBytes(iface.txBytes) +
+              " • " + iface.rxMbit.toFixed(2) + "Mbps down / " + iface.txMbit.toFixed(2) + "Mbps up";
+            item.appendChild(title);
+            item.appendChild(meta);
+            networkListEl.appendChild(item);
+          });
+        }
+
+        function renderGpu(gpus) {
+          if (!gpuListEl) {
+            return;
+          }
+          gpuListEl.innerHTML = "";
+          if (!gpus || gpus.length === 0) {
+            var empty = document.createElement("li");
+            empty.className = "stat-item";
+            empty.textContent = "No GPU detected.";
+            gpuListEl.appendChild(empty);
+            return;
+          }
+          gpus.forEach(function (gpu) {
+            var item = document.createElement("li");
+            item.className = "stat-item";
+            var title = document.createElement("div");
+            title.className = "stat-title";
+            title.textContent = gpu.model;
+            var meta = document.createElement("div");
+            meta.className = "stat-meta";
+            var parts = [];
+            if (gpu.vendor) parts.push(gpu.vendor);
+            if (gpu.vramMB) parts.push((gpu.vramMB / 1024).toFixed(1) + " GB VRAM");
+            if (gpu.temperatureC !== undefined && gpu.temperatureC !== null) {
+              parts.push(gpu.temperatureC.toFixed(1) + "°C");
+            }
+            meta.textContent = parts.join(" • ") || "No additional data";
+            item.appendChild(title);
+            item.appendChild(meta);
+            gpuListEl.appendChild(item);
+          });
+        }
+
+        function renderBattery(battery) {
+          if (!batteryListEl) {
+            return;
+          }
+          batteryListEl.innerHTML = "";
+          if (!battery || !battery.hasBattery) {
+            var empty = document.createElement("li");
+            empty.className = "stat-item";
+            empty.textContent = "No battery present.";
+            batteryListEl.appendChild(empty);
+            return;
+          }
+          var item = document.createElement("li");
+          item.className = "stat-item";
+          var title = document.createElement("div");
+          title.className = "stat-title";
+          title.textContent = "Battery";
+          var meta = document.createElement("div");
+          meta.className = "stat-meta";
+          var parts = [];
+          if (battery.percent !== undefined) parts.push(battery.percent.toFixed(1) + "%");
+          if (battery.isCharging !== undefined) parts.push(battery.isCharging ? "Charging" : "Discharging");
+          if (battery.temperatureC !== undefined && battery.temperatureC !== null) {
+            parts.push(battery.temperatureC.toFixed(1) + "°C");
+          }
+          meta.textContent = parts.join(" • ");
+          item.appendChild(title);
+          item.appendChild(meta);
+          batteryListEl.appendChild(item);
+        }
+        function renderLogsSummary(summary) {
+          if (!logsSummaryEl || !summary) {
+            return;
+          }
+          clearAndFill(logsSummaryEl, [
+            createBadge("Total " + summary.totalEntries),
+            createBadge("5m " + summary.last5Minutes),
+            createBadge("15m " + summary.last15Minutes),
+            createBadge("60m " + summary.last60Minutes),
+            createBadge("Errors " + summary.recentErrorCount, summary.recentErrorCount ? "danger" : "success"),
+            createBadge("Log file " + (summary.fileSizeBytes != null ? formatBytes(summary.fileSizeBytes) : "n/a")),
+          ]);
+        }
+
+        function renderPlatform(metrics) {
+          if (platformEl) {
+            var parts = [metrics.platform.hostname, metrics.platform.platform + " " + metrics.platform.release, metrics.platform.arch];
+            platformEl.textContent = "Host: " + parts.join(" • ");
+          }
+          if (environmentEl) {
+            environmentEl.textContent = "Env: " + (metrics.environment && metrics.environment.nodeEnv ? metrics.environment.nodeEnv : "default");
+          }
+          if (lastUpdatedEl) {
+            lastUpdatedEl.textContent = "Updated: " + new Date(metrics.timestamp).toLocaleTimeString();
+          }
+        }
+
+        function renderLogsTable(logs) {
+          if (!logsTableBody) {
+            return;
+          }
+          logsTableBody.innerHTML = "";
+          if (!logs || !Array.isArray(logs) || logs.length === 0) {
+            var emptyRow = document.createElement("tr");
+            var emptyCell = document.createElement("td");
+            emptyCell.colSpan = 5;
+            emptyCell.textContent = "No log entries.";
+            emptyRow.appendChild(emptyCell);
+            logsTableBody.appendChild(emptyRow);
+            return;
+          }
+          logs.slice(0, maxLogRows).forEach(function (log) {
+            var row = document.createElement("tr");
+            var timeCell = document.createElement("td");
+            var timestamp = Date.parse(log.timestamp);
+            timeCell.textContent = Number.isNaN(timestamp) ? log.timestamp : new Date(timestamp).toLocaleString();
+            row.appendChild(timeCell);
+
+            var methodCell = document.createElement("td");
+            methodCell.textContent = log.method;
+            row.appendChild(methodCell);
+
+            var statusCell = document.createElement("td");
+            statusCell.textContent = String(log.status);
+            if (log.status >= 500) {
+              statusCell.style.color = "var(--danger)";
+            }
+            row.appendChild(statusCell);
+
+            var durationCell = document.createElement("td");
+            durationCell.textContent = typeof log.durationMs === "number" ? log.durationMs.toFixed(1) + " ms" : "";
+            row.appendChild(durationCell);
+
+            var urlCell = document.createElement("td");
+            urlCell.textContent = log.url;
+            row.appendChild(urlCell);
+
+            logsTableBody.appendChild(row);
+          });
+        }
+        function applyMetrics(data) {
+          if (!data) {
+            setStatus(metricsStatusEl, "Waiting for metrics...", false);
+            return;
+          }
+          renderCpu(data);
+          renderMemory(data);
+          renderUptime(data);
+          renderStorage(data.hardware && data.hardware.storage);
+          renderNetwork(data.hardware && data.hardware.network);
+          renderGpu(data.hardware && data.hardware.gpu);
+          renderBattery(data.hardware && data.hardware.battery);
+          renderLogsSummary(data.logs);
+          renderPlatform(data);
+          setStatus(metricsStatusEl, "", false);
+        }
+
+        function applyLogs(logs) {
+          if (Array.isArray(logs)) {
+            renderLogsTable(logs);
+            if (logs.length > 0) {
+              latestLogsStamp = logs[0].timestamp;
+              setStatus(logsStatusEl, "Latest: " + new Date(logs[0].timestamp).toLocaleTimeString(), false);
+            } else {
+              setStatus(logsStatusEl, "No recent requests", false);
+            }
+          }
+        }
+
+        if (initialMetrics) {
+          applyMetrics(initialMetrics);
+        } else {
+          setStatus(metricsStatusEl, "Waiting for metrics...", false);
+        }
+        if (initialLogs) {
+          applyLogs(initialLogs);
+        } else {
+          renderLogsTable([]);
+        }
+
+        function updateMetrics() {
+          fetch(metricsEndpoint, fetchOptions)
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error("HTTP " + response.status);
+              }
+              return response.json();
+            })
+            .then(function (data) {
+              applyMetrics(data);
+            })
+            .catch(function (error) {
+              setStatus(metricsStatusEl, "Metrics unavailable: " + error.message, true);
+            });
+        }
+
+        function updateLogs() {
+          fetch(logsEndpoint, fetchOptions)
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error("HTTP " + response.status);
+              }
+              return response.json();
+            })
+            .then(function (data) {
+              if (data && Array.isArray(data.logs)) {
+                applyLogs(data.logs);
+              } else {
+                renderLogsTable([]);
+                setStatus(logsStatusEl, "", false);
+              }
+            })
+            .catch(function (error) {
+              setStatus(logsStatusEl, "Logs unavailable: " + error.message, true);
+            });
+        }
+
+        updateMetrics();
+        updateLogs();
+        setInterval(updateMetrics, metricsIntervalMs);
+        setInterval(updateLogs, logsIntervalMs);
+      })();
