@@ -14,6 +14,7 @@ export type FetchWysylkiByMrnOptions = {
   limit?: number;
   preferXml?: boolean;
   includeDocumentXml?: boolean;
+  includeResponseXml?: boolean;
 };
 
 const buildQueryConditions = (
@@ -56,6 +57,8 @@ export const fetchWysylkiByMrn = async (
     typeof filterOptions.fileCode === "string" ? filterOptions.fileCode.trim() : "";
   const includeDocumentXml =
     filterOptions.includeDocumentXml ?? !preferXml;
+  const includeResponseXml =
+    filterOptions.includeResponseXml ?? true;
 
   const { conditions, parameters } = buildQueryConditions(
     normalizedMrn,
@@ -94,6 +97,7 @@ export const fetchWysylkiByMrn = async (
         decodedRows.push(
           await mapWysylkaRowWithAllColumns(row, attachment, transaction, {
             includeDocumentXml,
+            includeResponseXml,
           })
         );
       }

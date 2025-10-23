@@ -4,7 +4,10 @@ import {
   fetchCmrSampleRows,
   fetchWysylkiByMrn,
 } from "../service/firebird";
-import { parseXmlFieldsForWysylkaRow } from "../utils/wysylkaXml";
+import {
+  extractDeclarantAndCommentFromXml,
+  parseXmlFieldsForWysylkaRow,
+} from "../utils/wysylkaXml";
 import { getFirstQueryParam } from "./helpers/queryParams";
 
 const firebirdRoutes = Router();
@@ -25,6 +28,66 @@ firebirdRoutes.get("/test", async (_req, res) => {
   try {
     const rows = await fetchCmrSampleRows();
     res.json({ rows });
+  } catch (error) {
+    res.status(503).json({
+      status: "error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+firebirdRoutes.get("/mrn/:mrn", async (req, res) => {
+  const rawMrn = typeof req.params.mrn === "string" ? req.params.mrn : "";
+  const normalizedMrn = rawMrn.trim();
+  const rawFileCode = getFirstQueryParam(req.query.fileCode);
+  const normalizedFileCode = rawFileCode.trim();
+  const rawLimitValue = getFirstQueryParam(req.query.limit);
+  const parsedLimit =
+    rawLimitValue.trim().length > 0 ? Number.parseInt(rawLimitValue, 10) : Number.NaN;
+  const requestedLimit = Number.isFinite(parsedLimit) ? parsedLimit : undefined;
+  const effectiveLimit =
+    requestedLimit !== undefined
+      ? Math.min(Math.max(Math.trunc(requestedLimit), 1), 50)
+      : undefined;
+
+  if (!normalizedMrn) {
+    res.status(400).json({
+      status: "error",
+      message: "Route parameter `mrn` must be a non-empty string.",
+    });
+    return;
+  }
+
+  try {
+    const rows = await fetchWysylkiByMrn(normalizedMrn, {
+      fileCode: normalizedFileCode || undefined,
+      limit: requestedLimit,
+      includeDocumentXml: false,
+      includeResponseXml: true,
+    });
+
+    const sanitizedRows = rows.map((row) => {
+      const clone: Record<string, unknown> = { ...row };
+      const rawOdpowiedz =
+        typeof clone["odpowiedzXml"] === "string" ? (clone["odpowiedzXml"] as string) : "";
+      const { declarant, comment } = extractDeclarantAndCommentFromXml(rawOdpowiedz);
+
+      delete clone["odpowiedzXml"];
+
+      return {
+        ...clone,
+        zglaszajacy: declarant,
+        komentarz: comment,
+      };
+    });
+
+    res.json({
+      mrn: normalizedMrn,
+      fileCode: normalizedFileCode || undefined,
+      limit: effectiveLimit,
+      count: sanitizedRows.length,
+      rows: sanitizedRows,
+    });
   } catch (error) {
     res.status(503).json({
       status: "error",
