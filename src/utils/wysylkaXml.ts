@@ -310,3 +310,205 @@ export const parseXmlFieldsForWysylkaRow = (
   const entries = wysylkaXmlConfig.map((section) => extractSection(row, section));
   return Object.fromEntries(entries);
 };
+
+const getFirstNonEmptyString = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    for (const element of value) {
+      const candidate = getFirstNonEmptyString(element);
+      if (candidate) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record["#text"] === "string") {
+      const direct = record["#text"].trim();
+      if (direct.length > 0) {
+        return direct;
+      }
+    }
+
+    for (const nested of Object.values(record)) {
+      const candidate = getFirstNonEmptyString(nested);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+};
+
+const extractNameLike = (value: unknown): string | null => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const element of value) {
+      const candidate = extractNameLike(element);
+      if (candidate) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    const preferredKeys = ["name", "Name", "personName", "fullName", "@_name"];
+    for (const key of preferredKeys) {
+      const candidate = record[key];
+      if (candidate !== undefined) {
+        const resolved = getFirstNonEmptyString(candidate);
+        if (resolved) {
+          return resolved;
+        }
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(record, "#text")) {
+      const textCandidate = record["#text"];
+      if (typeof textCandidate === "string") {
+        const trimmed = textCandidate.trim();
+        if (trimmed.length > 0) {
+          return trimmed;
+        }
+      }
+    }
+
+    const contactPerson = record["ContactPerson"];
+    if (contactPerson !== undefined) {
+      const contactCandidate = extractNameLike(contactPerson);
+      if (contactCandidate) {
+        return contactCandidate;
+      }
+    }
+
+    for (const nested of Object.values(record)) {
+      const candidate = extractNameLike(nested);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+};
+
+const extractFirstMatchingString = (
+  value: unknown,
+  predicate: (key: string) => boolean,
+  valueExtractor: (value: unknown) => string | null
+): string | null => {
+  if (Array.isArray(value)) {
+    for (const element of value) {
+      const candidate = extractFirstMatchingString(element, predicate, valueExtractor);
+      if (candidate) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  if (typeof value === "object" && value !== null) {
+    const record = value as Record<string, unknown>;
+    for (const [key, nested] of Object.entries(record)) {
+      if (predicate(key)) {
+        const extracted = valueExtractor(nested);
+        if (extracted) {
+          return extracted;
+        }
+      }
+    }
+
+    for (const nested of Object.values(record)) {
+      const candidate = extractFirstMatchingString(nested, predicate, valueExtractor);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+};
+
+const DECLARANT_KEY_PATTERNS = [
+  /holderof/i,
+  /declarant/i,
+  /zglaszaj/i,
+  /submitter/i,
+  /representative/i,
+];
+
+const COMMENT_KEY_PATTERNS = [
+  /comment/i,
+  /komentarz/i,
+  /remark/i,
+  /uwag/i,
+  /notes?/i,
+];
+
+const matchesAnyPattern = (patterns: readonly RegExp[], key: string): boolean => {
+  for (const pattern of patterns) {
+    if (pattern.test(key)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+export const extractDeclarantAndCommentFromXml = (
+  xml: string
+): { declarant: string | null; comment: string | null } => {
+  const sanitized = sanitizeXml(xml);
+  if (!sanitized) {
+    return { declarant: null, comment: null };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = xmlParser.parse(sanitized);
+  } catch (error) {
+    console.warn(
+      `[wysylkaXml] Failed to parse XML while extracting declarant/comment: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+    return { declarant: null, comment: null };
+  }
+
+  const declarant = extractFirstMatchingString(
+    parsed,
+    (key) => matchesAnyPattern(DECLARANT_KEY_PATTERNS, key),
+    extractNameLike
+  );
+
+  const comment = extractFirstMatchingString(
+    parsed,
+    (key) => matchesAnyPattern(COMMENT_KEY_PATTERNS, key),
+    getFirstNonEmptyString
+  );
+
+  return {
+    declarant: declarant ?? null,
+    comment: comment ?? null,
+  };
+};

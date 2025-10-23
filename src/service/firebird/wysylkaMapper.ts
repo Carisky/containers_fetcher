@@ -9,6 +9,7 @@ import {
 
 type MapOptions = {
   includeDocumentXml?: boolean;
+  includeResponseXml?: boolean;
 };
 
 const normalizeColumnValue = async (
@@ -59,6 +60,7 @@ export const mapWysylkaRowWithAllColumns = async (
   options: MapOptions = {}
 ): Promise<Record<string, unknown>> => {
   const includeDocumentXml = options.includeDocumentXml ?? true;
+  const includeResponseXml = options.includeResponseXml ?? true;
 
   const rawId = row["ID_WYSYLKI"];
   const numericId = typeof rawId === "number" ? rawId : Number(rawId);
@@ -79,15 +81,18 @@ export const mapWysylkaRowWithAllColumns = async (
     );
   }
 
-  const odpowiedzBuffer = await readBlobAsBuffer(
-    attachment,
-    transaction,
-    row["ODPOWIEDZXML"]
-  );
-  const odpowiedz = decodeZlibBuffer(
-    odpowiedzBuffer,
-    `WYSYLKICELINA.ID_WYSYLKI=${contextId} ODPOWIEDZXML`
-  );
+  let odpowiedz: DecodedXmlResult = { decoded: null, byteLength: null };
+  if (includeResponseXml) {
+    const odpowiedzBuffer = await readBlobAsBuffer(
+      attachment,
+      transaction,
+      row["ODPOWIEDZXML"]
+    );
+    odpowiedz = decodeZlibBuffer(
+      odpowiedzBuffer,
+      `WYSYLKICELINA.ID_WYSYLKI=${contextId} ODPOWIEDZXML`
+    );
+  }
 
   const base: Record<string, unknown> = {};
   const entries = await Promise.all(
