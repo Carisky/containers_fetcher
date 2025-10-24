@@ -8,13 +8,9 @@ export {
   withFirebirdAttachment,
 } from "./connection";
 
-export type {
-  FetchWysylkiByDateOptions,
-  FetchWysylkiByMrnOptions,
-} from "./wysylkiRepository";
+export type { FetchWysylkiByMrnOptions } from "./wysylkiRepository";
 export {
   checkFirebirdConnection,
   fetchCmrSampleRows,
-  fetchWysylkiByCreationDate,
   fetchWysylkiByMrn,
 } from "./wysylkiRepository";

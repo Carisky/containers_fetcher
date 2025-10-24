@@ -1,14 +1,10 @@
 export type WysylkaXmlSourceKey = "odpowiedzXml" | "dokumentXml";
 
-export type WysylkaXmlFieldAggregator =
-  | "houseConsignmentSupportingDocumentsSum";
-
 export type WysylkaXmlFieldConfig = {
   name: string;
   paths: readonly string[];
   regex?: string;
   description?: string;
-  aggregate?: WysylkaXmlFieldAggregator;
 };
 
 export type WysylkaXmlSectionConfig = {
@@ -99,79 +95,9 @@ export const wysylkaXmlConfig: readonly WysylkaXmlSectionConfig[] = [
         name: "closeDate",
         paths: [
           "IE045PL.CC045C.TransitOperation.writeOffDate",
-          "IE029PL.CC029C.TransitOperation.writeOffDate",
         ],
         regex: "^\\d{4}-\\d{2}-\\d{2}$",
         description: "Transit close date extracted from writeOffDate in IE045.",
-      },
-      {
-        name: "releaseDate",
-        paths: [
-          "IE029PL.CC029C.CountrySpecificDataPL.ReleaseDate",
-          "IE029PL.CountrySpecificDataPL.ReleaseDate",
-          "IE028PL.CC028C.CountrySpecificDataPL.ReleaseDate",
-          "IE045PL.CC045C.CountrySpecificDataPL.ReleaseDate",
-          "IE029PL.CC029C.TransitOperation.releaseDate",
-        ],
-        regex: "^\\d{4}-\\d{2}-\\d{2}$",
-        description: "Release date reported in the country specific data block.",
-      },
-      {
-        name: "controlResultDate",
-        paths: [
-          "IE029PL.CC029C.ControlResult.date",
-          "IE045PL.CC045C.ControlResult.date",
-        ],
-        regex: "^\\d{4}-\\d{2}-\\d{2}$",
-        description: "Control result date from the transit message.",
-      },
-      {
-        name: "customsOfficeOfDepartureReferenceNumber",
-        paths: [
-          "IE029PL.CC029C.CustomsOfficeOfDeparture.referenceNumber",
-          "IE028PL.CC028C.CustomsOfficeOfDeparture.referenceNumber",
-        ],
-        regex: "^[A-Z0-9]+$",
-        description:
-          "Reference number of the declared customs office of departure.",
-      },
-      {
-        name: "customsOfficeOfDestinationDeclaredReferenceNumber",
-        paths: [
-          "IE029PL.CC029C.CustomsOfficeOfDestinationDeclared.referenceNumber",
-          "IE028PL.CC028C.CustomsOfficeOfDestinationDeclared.referenceNumber",
-        ],
-        regex: "^[A-Z0-9]+$",
-        description:
-          "Reference number of the declared customs office of destination.",
-      },
-      {
-        name: "guaranteeAmountToBeCovered",
-        paths: [
-          "IE029PL.CC029C.Guarantee.GuaranteeReference.amountToBeCovered",
-          "IE028PL.CC028C.Guarantee.GuaranteeReference.amountToBeCovered",
-        ],
-        regex: "^\\d+(?:\\.\\d+)?$",
-        description: "Total guarantee amount to be covered.",
-      },
-      {
-        name: "activeBorderTransportMeansIdentificationNumber",
-        paths: [
-          "IE029PL.CC029C.ActiveBorderTransportMeans.identificationNumber",
-          "IE028PL.CC028C.ActiveBorderTransportMeans.identificationNumber",
-          "IE045PL.CC045C.ActiveBorderTransportMeans.identificationNumber",
-          "IE029PL.CC029C.Consignment.ActiveBorderTransportMeans.identificationNumber",
-        ],
-        regex: "^[A-Z0-9\\- ]+$",
-        description:
-          "Identification number of the active border transport means.",
-      },
-      {
-        name: "houseConsignmentSupportingDocumentsSum",
-        paths: [],
-        description:
-          "Sum of HouseConsignment/ConsignmentItem supporting document complement values.",
-        aggregate: "houseConsignmentSupportingDocumentsSum",
       },
     ],
   },

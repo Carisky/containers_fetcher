@@ -3,7 +3,6 @@ import {
   wysylkaXmlConfig,
   WysylkaXmlFieldConfig,
   WysylkaXmlSectionConfig,
-  type WysylkaXmlFieldAggregator,
 } from "../config/wysylkiXmlConfig";
 
 type ExtractedFields = Record<string, string | null>;
@@ -211,209 +210,6 @@ const getValueAtPath = (root: unknown, path: string): string | null => {
   return coerceToString(current);
 };
 
-const collectNodes = (
-  root: unknown,
-  path: readonly string[],
-): unknown[] => {
-  const results: unknown[] = [];
-
-  const traverse = (current: unknown, index: number): void => {
-    if (index === path.length) {
-      results.push(current);
-      return;
-    }
-
-    if (current === null || current === undefined) {
-      return;
-    }
-
-    if (Array.isArray(current)) {
-      for (const entry of current) {
-        traverse(entry, index);
-      }
-      return;
-    }
-
-    if (typeof current !== "object") {
-      return;
-    }
-
-    const record = current as Record<string, unknown>;
-    const next = record[path[index]];
-    if (next === undefined) {
-      return;
-    }
-
-    traverse(next, index + 1);
-  };
-
-  traverse(root, 0);
-  return results;
-};
-
-const collectSupportingDocuments = (root: unknown): unknown[] => {
-  const results: unknown[] = [];
-
-  const visit = (node: unknown): void => {
-    if (!node || typeof node !== "object") {
-      return;
-    }
-
-    const record = node as Record<string, unknown>;
-    for (const [key, value] of Object.entries(record)) {
-      if (key === "SupportingDocument") {
-        if (Array.isArray(value)) {
-          results.push(...value);
-        } else if (value !== null && value !== undefined) {
-          results.push(value);
-        }
-      } else if (
-        value !== null &&
-        (typeof value === "object" || Array.isArray(value))
-      ) {
-        visit(value);
-      }
-    }
-  };
-
-  visit(root);
-  return results;
-};
-
-const formatNumberWithComma = (value: number): string =>
-  value.toFixed(2).replace(".", ",");
-
-const parseAmountAndCurrency = (
-  raw: string,
-): { amount: number; currency: string | null } | null => {
-  const collapsed = raw.replace(/\s+/g, " ").trim();
-  if (!collapsed) {
-    return null;
-  }
-
-  const amountMatch = collapsed.match(/[-+]?\d[\d\s.,]*/);
-  if (!amountMatch) {
-    return null;
-  }
-
-  const amountCandidate = amountMatch[0].replace(/\s+/g, "");
-  const commaIndex = amountCandidate.lastIndexOf(",");
-  const dotIndex = amountCandidate.lastIndexOf(".");
-
-  let normalizedAmount = amountCandidate;
-  if (commaIndex > dotIndex) {
-    normalizedAmount = amountCandidate.replace(/\./g, "").replace(",", ".");
-  } else if (dotIndex > commaIndex) {
-    normalizedAmount = amountCandidate.replace(/,/g, "");
-  } else {
-    normalizedAmount = amountCandidate.replace(",", ".");
-  }
-
-  const amount = Number.parseFloat(normalizedAmount);
-  if (!Number.isFinite(amount)) {
-    return null;
-  }
-
-  const currencyMatch = collapsed.match(/\b([A-Z]{3})\b/i);
-  const currency = currencyMatch ? currencyMatch[1].toUpperCase() : null;
-
-  return { amount, currency };
-};
-
-function aggregateHouseConsignmentSupportingDocumentsSum(
-  parsed: unknown,
-): string | null {
-  const candidatePaths: ReadonlyArray<readonly string[]> = [
-    [
-      "IE029PL",
-      "CC029C",
-      "Consignment",
-      "HouseConsignment",
-    ],
-    [
-      "IE028PL",
-      "CC028C",
-      "Consignment",
-      "HouseConsignment",
-    ],
-    [
-      "IE045PL",
-      "CC045C",
-      "Consignment",
-      "HouseConsignment",
-    ],
-  ];
-
-  const houseConsignments = candidatePaths.flatMap((path) =>
-    collectNodes(parsed, path),
-  );
-
-  const documentNodes = houseConsignments.flatMap((node) =>
-    collectSupportingDocuments(node),
-  );
-
-  let totalCents = 0;
-  let found = false;
-  const currencies = new Set<string>();
-
-  for (const node of documentNodes) {
-    let complementSource: unknown;
-    if (node && typeof node === "object") {
-      const record = node as Record<string, unknown>;
-      complementSource =
-        record["complementOfInformation"] ??
-        record["ComplementOfInformation"] ??
-        record["COMPLEMENTOFINFORMATION"];
-    } else {
-      complementSource = node;
-    }
-
-    const complement = getFirstNonEmptyString(complementSource);
-    if (!complement) {
-      continue;
-    }
-
-    const parsedValue = parseAmountAndCurrency(complement);
-    if (!parsedValue) {
-      continue;
-    }
-
-    const cents = Math.round(parsedValue.amount * 100);
-    if (!Number.isFinite(cents)) {
-      continue;
-    }
-
-    totalCents += cents;
-    if (parsedValue.currency) {
-      currencies.add(parsedValue.currency);
-    }
-    found = true;
-  }
-
-  if (!found) {
-    return null;
-  }
-
-  const total = totalCents / 100;
-  const formattedTotal = formatNumberWithComma(total);
-  const currencyLabel =
-    currencies.size > 0 ? ` ${Array.from(currencies).join("/")}` : "";
-
-  return `${formattedTotal}${currencyLabel}`.trim();
-}
-
-function runFieldAggregator(
-  key: WysylkaXmlFieldAggregator,
-  parsed: unknown,
-): string | null {
-  switch (key) {
-    case "houseConsignmentSupportingDocumentsSum":
-      return aggregateHouseConsignmentSupportingDocumentsSum(parsed);
-    default:
-      return null;
-  }
-}
-
 const buildEmptyResult = (fields: readonly WysylkaXmlFieldConfig[]): ExtractedFields => {
   return Object.fromEntries(fields.map((field) => [field.name, null]));
 };
@@ -448,59 +244,42 @@ const extractFieldsFromXml = (
   for (const field of fields) {
     let resolved: string | null = null;
 
-    if (field.aggregate) {
+    for (const candidatePath of field.paths) {
       try {
-        const aggregated = runFieldAggregator(field.aggregate, parsed);
-        if (aggregated !== null && aggregated.trim().length > 0) {
-          resolved = aggregated;
+        const rawCandidate = getValueAtPath(parsed, candidatePath);
+        if (rawCandidate === null) {
+          continue;
         }
+
+        const candidate = rawCandidate.trim();
+        if (candidate.length === 0) {
+          continue;
+        }
+
+        if (field.regex) {
+          const regex = resolveRegex(field.regex);
+          if (regex) {
+            if (!regex.test(candidate)) {
+              const cacheKey = `${field.regex}::${candidatePath}`;
+              if (!regexMismatchCache.has(cacheKey)) {
+                regexMismatchCache.add(cacheKey);
+                console.warn(
+                  `[wysylkaXml] Value '${candidate}' for path '${candidatePath}' does not match regex '${field.regex}' (source '${sourceKey}').`
+                );
+              }
+              continue;
+            }
+          }
+        }
+
+        resolved = candidate;
+        break;
       } catch (error) {
         console.warn(
-          `[wysylkaXml] Failed to aggregate field '${field.name}' using aggregator '${field.aggregate}': ${
+          `[wysylkaXml] Failed to resolve path '${candidatePath}' for '${sourceKey}': ${
             error instanceof Error ? error.message : String(error)
           }`
         );
-      }
-    }
-
-    if (resolved === null) {
-      for (const candidatePath of field.paths) {
-        try {
-          const rawCandidate = getValueAtPath(parsed, candidatePath);
-          if (rawCandidate === null) {
-            continue;
-          }
-
-          const candidate = rawCandidate.trim();
-          if (candidate.length === 0) {
-            continue;
-          }
-
-          if (field.regex) {
-            const regex = resolveRegex(field.regex);
-            if (regex) {
-              if (!regex.test(candidate)) {
-                const cacheKey = `${field.regex}::${candidatePath}`;
-                if (!regexMismatchCache.has(cacheKey)) {
-                  regexMismatchCache.add(cacheKey);
-                  console.warn(
-                    `[wysylkaXml] Value '${candidate}' for path '${candidatePath}' does not match regex '${field.regex}' (source '${sourceKey}').`
-                  );
-                }
-                continue;
-              }
-            }
-          }
-
-          resolved = candidate;
-          break;
-        } catch (error) {
-          console.warn(
-            `[wysylkaXml] Failed to resolve path '${candidatePath}' for '${sourceKey}': ${
-              error instanceof Error ? error.message : String(error)
-            }`
-          );
-        }
       }
     }
 
@@ -532,7 +311,7 @@ export const parseXmlFieldsForWysylkaRow = (
   return Object.fromEntries(entries);
 };
 
-function getFirstNonEmptyString(value: unknown): string | null {
+const getFirstNonEmptyString = (value: unknown): string | null => {
   if (value === null || value === undefined) {
     return null;
   }
@@ -574,9 +353,9 @@ function getFirstNonEmptyString(value: unknown): string | null {
   }
 
   return null;
-}
+};
 
-function extractNameLike(value: unknown): string | null {
+const extractNameLike = (value: unknown): string | null => {
   if (typeof value === "string") {
     const trimmed = value.trim();
     return trimmed.length > 0 ? trimmed : null;
@@ -632,13 +411,13 @@ function extractNameLike(value: unknown): string | null {
   }
 
   return null;
-}
+};
 
-function extractFirstMatchingString(
+const extractFirstMatchingString = (
   value: unknown,
   predicate: (key: string) => boolean,
-  valueExtractor: (value: unknown) => string | null,
-): string | null {
+  valueExtractor: (value: unknown) => string | null
+): string | null => {
   if (Array.isArray(value)) {
     for (const element of value) {
       const candidate = extractFirstMatchingString(element, predicate, valueExtractor);
@@ -669,7 +448,7 @@ function extractFirstMatchingString(
   }
 
   return null;
-}
+};
 
 const DECLARANT_KEY_PATTERNS = [
   /holderof/i,
@@ -687,14 +466,14 @@ const COMMENT_KEY_PATTERNS = [
   /notes?/i,
 ];
 
-function matchesAnyPattern(patterns: readonly RegExp[], key: string): boolean {
+const matchesAnyPattern = (patterns: readonly RegExp[], key: string): boolean => {
   for (const pattern of patterns) {
     if (pattern.test(key)) {
       return true;
     }
   }
   return false;
-}
+};
 
 export const extractDeclarantAndCommentFromXml = (
   xml: string
