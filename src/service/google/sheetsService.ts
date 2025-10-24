@@ -4,6 +4,10 @@ import {
   getGoogleSheetsAuthMode,
   getTestSpreadsheetConfig,
 } from "../../config/googleSheetsConfig";
+import {
+  type GoogleSheetsTable,
+  getGoogleSheetsTableOrThrow,
+} from "../../config/googleSheetsTables";
 
 let sheetsClientPromise: Promise<sheets_v4.Sheets> | null = null;
 
@@ -62,6 +66,38 @@ const normalizeCellValue = (value: unknown): string | null => {
   }
 
   return JSON.stringify(value);
+};
+
+const columnIndexToLetter = (index: number): string => {
+  let result = "";
+  let current = index + 1;
+  while (current > 0) {
+    const remainder = (current - 1) % 26;
+    result = String.fromCharCode(65 + remainder) + result;
+    current = Math.floor((current - 1) / 26);
+  }
+  return result;
+};
+
+const resolveSheetLocatorFromTable = (
+  table: GoogleSheetsTable,
+): { sheetId?: number; sheetName?: string } => {
+  const sheetId =
+    table.gidNumber === null || table.gidNumber === undefined
+      ? undefined
+      : table.gidNumber;
+  const sheetName =
+    table.sheetName && table.sheetName.trim().length > 0
+      ? table.sheetName
+      : undefined;
+
+  if (sheetId === undefined && !sheetName) {
+    throw new Error(
+      `Google Sheets table "${table.configKey}" must provide a gid or sheetName.`,
+    );
+  }
+
+  return { sheetId, sheetName };
 };
 
 export interface ColumnFetchParams {
@@ -175,4 +211,96 @@ export const fetchTestColumn = async (): Promise<ColumnFetchResult> => {
     sheetName: config.sheetName,
     headerName: config.headerName,
   });
+};
+
+export const buildColumnFetchParamsFromTable = (
+  table: GoogleSheetsTable,
+  headerName: string,
+): ColumnFetchParams => {
+  const { sheetId, sheetName } = resolveSheetLocatorFromTable(table);
+  return {
+    spreadsheetId: table.id,
+    sheetId,
+    sheetName,
+    headerName,
+  };
+};
+
+export const fetchColumnForTable = async (
+  table: GoogleSheetsTable,
+  headerName: string,
+): Promise<ColumnFetchResult> =>
+  fetchColumnByHeader(buildColumnFetchParamsFromTable(table, headerName));
+
+export const fetchColumnByTableIdentifier = async (
+  identifier: string,
+  headerName: string,
+  options?: { by?: string },
+): Promise<ColumnFetchResult> => {
+  const table = getGoogleSheetsTableOrThrow(identifier, options?.by);
+  return fetchColumnForTable(table, headerName);
+};
+
+export interface HeaderUpdateResult {
+  spreadsheetId: string;
+  sheetName: string;
+  cell: string;
+  previousValue: string;
+  newValue: string;
+}
+
+export const appendTestToHeader = async (): Promise<HeaderUpdateResult> => {
+  const config = getTestSpreadsheetConfig();
+  const sheets = await getSheetsClient();
+  const sheetName = await resolveSheetName(sheets, config.spreadsheetId, {
+    sheetId: config.sheetId,
+    sheetName: config.sheetName,
+  });
+
+  const headerRange = `'${escapeSheetName(sheetName)}'!1:1`;
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: config.spreadsheetId,
+    range: headerRange,
+    majorDimension: "ROWS",
+    valueRenderOption: "FORMATTED_VALUE",
+  });
+
+  const headers = response.data.values?.[0] ?? [];
+  const targetIndex = headers.findIndex((header) => {
+    if (typeof header !== "string") {
+      return false;
+    }
+    return header.trim().toLowerCase() === config.headerName.trim().toLowerCase();
+  });
+
+  if (targetIndex === -1) {
+    throw new Error(
+      `Column "${config.headerName}" not found in sheet "${sheetName}".`,
+    );
+  }
+
+  const rawCurrent = headers[targetIndex];
+  const previousValue =
+    typeof rawCurrent === "string" ? rawCurrent : normalizeCellValue(rawCurrent) ?? "";
+  const newValue = previousValue ? `${previousValue} test` : "test";
+  const columnLetter = columnIndexToLetter(targetIndex);
+  const cell = `${columnLetter}1`;
+  const updateRange = `'${escapeSheetName(sheetName)}'!${cell}`;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: config.spreadsheetId,
+    range: updateRange,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[newValue]],
+    },
+  });
+
+  return {
+    spreadsheetId: config.spreadsheetId,
+    sheetName,
+    cell,
+    previousValue,
+    newValue,
+  };
 };

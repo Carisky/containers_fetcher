@@ -67,6 +67,13 @@ jobs:
             FIREBIRD_PLUGIN_NAME=${{ secrets.FIREBIRD_PLUGIN_NAME }}
             FIREBIRD_LIBRARY_PATH=${{ secrets.FIREBIRD_LIBRARY_PATH }}
             CONTAINER_LOOKUP_CONCURRENCY=${{ secrets.CONTAINER_LOOKUP_CONCURRENCY }}
+            GOOGLE_SHEETS_SPREADSHEET_ID=${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID }}
+            GOOGLE_SHEETS_TEST_GID=${{ secrets.GOOGLE_SHEETS_TEST_GID }}
+            GOOGLE_SHEETS_AUTH_STRATEGY=${{ secrets.GOOGLE_SHEETS_AUTH_STRATEGY }}
+            GOOGLE_SHEETS_CREDENTIALS_PATH=${{ secrets.GOOGLE_SHEETS_CREDENTIALS_PATH }}
+            GOOGLE_SHEETS_REFRESH_TOKEN=${{ secrets.GOOGLE_SHEETS_REFRESH_TOKEN }}
+            GOOGLE_SHEETS_OAUTH_CLIENT_ID=${{ secrets.GOOGLE_SHEETS_OAUTH_CLIENT_ID }}
+            GOOGLE_SHEETS_OAUTH_CLIENT_SECRET=${{ secrets.GOOGLE_SHEETS_OAUTH_CLIENT_SECRET }}
             EOF
             docker stop containers-fetcher || true
             docker rm containers-fetcher || true

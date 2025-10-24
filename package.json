@@ -20,6 +20,7 @@
         "express": "^4.19.2",
         "googleapis": "^164.1.0",
         "fast-xml-parser": "^4.5.3",
+        "googleapis": "^164.1.0",
         "node-firebird-driver": "^3.2.2",
         "node-firebird-native-api": "^3.1.2",
         "papaparse": "^5.5.3",
@@ -28,6 +29,8 @@
     "devDependencies": {
         "@types/express": "^4.17.21",
         "@types/node": "^20.11.30",
+        "concurrently": "^9.2.1",
+        "localtunnel": "^2.0.2",
         "ts-node-dev": "^2.0.0",
         "typescript": "^5.4.3"
     },
@@ -35,4 +38,3 @@
         "node-firebird-driver-native": "^3.2.2"
     }
 }
-
