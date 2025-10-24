@@ -4,7 +4,9 @@
     "main": "dist/server.js",
     "scripts": {
         "dev": "ts-node-dev --respawn src/server.ts",
-        "build": "tsc"
+        "build": "tsc",
+        "tunnel": "lt --port 3400 --subdomain my-sheets-dev",
+        "dev:public": "concurrently -k -n dev,tunnel -c auto \"npm:dev\" \"npm:tunnel\""
     },
     "dependencies": {
         "@types/cors": "^2.8.19",
