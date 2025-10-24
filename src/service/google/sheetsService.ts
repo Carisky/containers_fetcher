@@ -4,6 +4,10 @@ import {
   getGoogleSheetsAuthMode,
   getTestSpreadsheetConfig,
 } from "../../config/googleSheetsConfig";
+import {
+  type GoogleSheetsTable,
+  getGoogleSheetsTableOrThrow,
+} from "../../config/googleSheetsTables";
 
 let sheetsClientPromise: Promise<sheets_v4.Sheets> | null = null;
 
@@ -73,6 +77,27 @@ const columnIndexToLetter = (index: number): string => {
     current = Math.floor((current - 1) / 26);
   }
   return result;
+};
+
+const resolveSheetLocatorFromTable = (
+  table: GoogleSheetsTable,
+): { sheetId?: number; sheetName?: string } => {
+  const sheetId =
+    table.gidNumber === null || table.gidNumber === undefined
+      ? undefined
+      : table.gidNumber;
+  const sheetName =
+    table.sheetName && table.sheetName.trim().length > 0
+      ? table.sheetName
+      : undefined;
+
+  if (sheetId === undefined && !sheetName) {
+    throw new Error(
+      `Google Sheets table "${table.configKey}" must provide a gid or sheetName.`,
+    );
+  }
+
+  return { sheetId, sheetName };
 };
 
 export interface ColumnFetchParams {
@@ -186,6 +211,34 @@ export const fetchTestColumn = async (): Promise<ColumnFetchResult> => {
     sheetName: config.sheetName,
     headerName: config.headerName,
   });
+};
+
+export const buildColumnFetchParamsFromTable = (
+  table: GoogleSheetsTable,
+  headerName: string,
+): ColumnFetchParams => {
+  const { sheetId, sheetName } = resolveSheetLocatorFromTable(table);
+  return {
+    spreadsheetId: table.id,
+    sheetId,
+    sheetName,
+    headerName,
+  };
+};
+
+export const fetchColumnForTable = async (
+  table: GoogleSheetsTable,
+  headerName: string,
+): Promise<ColumnFetchResult> =>
+  fetchColumnByHeader(buildColumnFetchParamsFromTable(table, headerName));
+
+export const fetchColumnByTableIdentifier = async (
+  identifier: string,
+  headerName: string,
+  options?: { by?: string },
+): Promise<ColumnFetchResult> => {
+  const table = getGoogleSheetsTableOrThrow(identifier, options?.by);
+  return fetchColumnForTable(table, headerName);
 };
 
 export interface HeaderUpdateResult {
