@@ -6,7 +6,7 @@ const ROOT_DIR = process.cwd();
 const DEFAULT_CREDENTIALS_FILE = path.join(ROOT_DIR, "credentials.json");
 
 export const GOOGLE_SHEETS_SCOPES = [
-  "https://www.googleapis.com/auth/spreadsheets.readonly",
+  "https://www.googleapis.com/auth/spreadsheets",
 ];
 
 type JsonObject = Record<string, unknown>;
@@ -185,6 +185,32 @@ const getOAuthRefreshToken = (): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const getOAuthFromEnv = ():
+  | {
+      clientId: string;
+      clientSecret: string;
+    }
+  | null => {
+  const clientId =
+    process.env.GOOGLE_SHEETS_OAUTH_CLIENT_ID ??
+    process.env.GOOGLE_SHEETS_CLIENT_ID;
+  const clientSecret =
+    process.env.GOOGLE_SHEETS_OAUTH_CLIENT_SECRET ??
+    process.env.GOOGLE_SHEETS_CLIENT_SECRET;
+
+  const normalizedClientId = clientId?.trim();
+  const normalizedClientSecret = clientSecret?.trim();
+
+  if (!normalizedClientId || !normalizedClientSecret) {
+    return null;
+  }
+
+  return {
+    clientId: normalizedClientId,
+    clientSecret: normalizedClientSecret,
+  };
+};
+
 const getServiceAccountFromEnv = (): GoogleSheetsAuthMode | null => {
   const clientEmail = process.env.GOOGLE_SHEETS_CLIENT_EMAIL?.trim();
   const privateKey = process.env.GOOGLE_SHEETS_PRIVATE_KEY;
@@ -207,6 +233,23 @@ export const getGoogleSheetsAuthMode = (): GoogleSheetsAuthMode => {
   const envServiceAccount = getServiceAccountFromEnv();
   if (envServiceAccount) {
     return envServiceAccount;
+  }
+
+  const envOAuth = getOAuthFromEnv();
+  if (envOAuth) {
+    const refreshToken = getOAuthRefreshToken();
+    if (!refreshToken) {
+      throw new Error(
+        "GOOGLE_SHEETS_REFRESH_TOKEN is required when using OAuth credentials.",
+      );
+    }
+
+    return {
+      mode: "oauth",
+      clientId: envOAuth.clientId,
+      clientSecret: envOAuth.clientSecret,
+      refreshToken,
+    };
   }
 
   const source = loadCredentialsSource();
@@ -238,8 +281,8 @@ export const getGoogleSheetsAuthMode = (): GoogleSheetsAuthMode => {
 };
 
 const DEFAULT_TEST_SPREADSHEET_ID =
-  "1JXXWm_fVyfEpfdwPfkKt7Tln9PU8QHtsE9g5rRFFCCA";
-const DEFAULT_TEST_SHEET_GID = 735708431;
+  "1rqouhd9J_VDkOSClLL-P54zT602IJSlmGX2YOAXAgPE";
+const DEFAULT_TEST_SHEET_GID = 1723757569;
 const DEFAULT_TEST_HEADER = "Numer T1 / T2 MRN";
 
 const parseSheetId = (raw: string | undefined): number | undefined => {
