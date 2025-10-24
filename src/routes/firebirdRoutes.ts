@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   checkFirebirdConnection,
   fetchCmrSampleRows,
+  fetchWysylkiByCreationDate,
   fetchWysylkiByMrn,
 } from "../service/firebird";
 import {
@@ -142,6 +143,73 @@ firebirdRoutes.get("/wysylki/mrn/:mrn", async (req, res) => {
       limit: effectiveLimit,
       count: enrichedRows.length,
       rows: enrichedRows,
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: "error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+firebirdRoutes.get("/wysylki/date/:date", async (req, res) => {
+  const rawDate = typeof req.params.date === "string" ? req.params.date : "";
+  const normalizedDate = rawDate.trim();
+  const rawFileCode = getFirstQueryParam(req.query.fileCode);
+  const normalizedFileCode = rawFileCode.trim();
+  const rawGrn = getFirstQueryParam(req.query.grn);
+  const normalizedGrn = rawGrn.trim();
+  const rawFormatValue = getFirstQueryParam(req.query.format);
+  const normalizedFormat = rawFormatValue.trim().toLowerCase();
+  const preferXml = normalizedFormat === "xml";
+
+  if (!normalizedDate) {
+    res.status(400).json({
+      status: "error",
+      message: "Route parameter `date` must be a non-empty string.",
+    });
+    return;
+  }
+
+  try {
+    const rows = await fetchWysylkiByCreationDate(normalizedDate, {
+      fileCode: normalizedFileCode || undefined,
+      preferXml,
+      includeDocumentXml: !preferXml,
+      includeResponseXml: true,
+    });
+    const enrichedRows = rows.map((row) => {
+      const sanitized: Record<string, unknown> = {
+        ...row,
+        ...parseXmlFieldsForWysylkaRow(row),
+      };
+      delete sanitized["odpowiedzXml"];
+      delete sanitized["odpowiedzXmlBytes"];
+      return sanitized;
+    });
+
+    const filteredRows =
+      normalizedGrn.length > 0
+        ? enrichedRows.filter((row) => {
+            const fields = row["odpowiedzXmlFields"];
+            const grnValue =
+              fields &&
+              typeof fields === "object" &&
+              fields !== null &&
+              typeof (fields as Record<string, unknown>)["grn"] === "string"
+                ? ((fields as Record<string, unknown>)["grn"] as string).trim()
+                : "";
+            return grnValue === normalizedGrn;
+          })
+        : enrichedRows;
+
+    res.json({
+      date: normalizedDate,
+      fileCode: normalizedFileCode || undefined,
+      grn: normalizedGrn || undefined,
+      format: preferXml ? "xml" : normalizedFormat || undefined,
+      count: filteredRows.length,
+      rows: filteredRows,
     });
   } catch (error) {
     res.status(503).json({
