@@ -1,5 +1,6 @@
 import { Router } from "express";
 import apiKeyAuth from "../middleware/apiKeyAuth";
+import googleTablesRoutes from "./googleTablesRoutes";
 import {
   appendTestToHeader,
   fetchTestColumn,
@@ -8,6 +9,7 @@ import {
 const googleRoutes = Router();
 
 googleRoutes.use(apiKeyAuth);
+googleRoutes.use("/tables", googleTablesRoutes);
 
 googleRoutes.get("/test", async (_req, res) => {
   try {

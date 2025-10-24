@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { JWTInput } from "google-auth-library";
+import { getDefaultGoogleSheetsTable } from "./googleSheetsTables";
 
 const ROOT_DIR = process.cwd();
 const DEFAULT_CREDENTIALS_FILE = path.join(ROOT_DIR, "credentials.json");
@@ -307,16 +308,27 @@ export interface TestSpreadsheetConfig {
 }
 
 export const getTestSpreadsheetConfig = (): TestSpreadsheetConfig => {
+  const defaultTable = getDefaultGoogleSheetsTable();
+  const envSpreadsheetId =
+    process.env.GOOGLE_SHEETS_TEST_SPREADSHEET_ID?.trim();
   const spreadsheetId =
-    process.env.GOOGLE_SHEETS_TEST_SPREADSHEET_ID?.trim() ||
+    (envSpreadsheetId && envSpreadsheetId.length > 0
+      ? envSpreadsheetId
+      : undefined) ||
+    defaultTable?.id ||
     DEFAULT_TEST_SPREADSHEET_ID;
   const sheetName =
-    process.env.GOOGLE_SHEETS_TEST_SHEET_NAME?.trim() || undefined;
+    process.env.GOOGLE_SHEETS_TEST_SHEET_NAME?.trim() ||
+    defaultTable?.sheetName ||
+    undefined;
   const sheetId =
-    parseSheetId(process.env.GOOGLE_SHEETS_TEST_SHEET_GID) ||
+    parseSheetId(process.env.GOOGLE_SHEETS_TEST_SHEET_GID) ??
+    defaultTable?.gidNumber ??
     DEFAULT_TEST_SHEET_GID;
   const headerName =
-    process.env.GOOGLE_SHEETS_TEST_HEADER?.trim() || DEFAULT_TEST_HEADER;
+    process.env.GOOGLE_SHEETS_TEST_HEADER?.trim() ||
+    defaultTable?.key ||
+    DEFAULT_TEST_HEADER;
 
   return {
     spreadsheetId,
