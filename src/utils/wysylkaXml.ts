@@ -328,27 +328,24 @@ function aggregateHouseConsignmentSupportingDocumentsSum(
       "IE029PL",
       "CC029C",
       "Consignment",
-      "HouseConsignment",
     ],
     [
       "IE028PL",
       "CC028C",
       "Consignment",
-      "HouseConsignment",
     ],
     [
       "IE045PL",
       "CC045C",
       "Consignment",
-      "HouseConsignment",
     ],
   ];
 
-  const houseConsignments = candidatePaths.flatMap((path) =>
+  const consignments = candidatePaths.flatMap((path) =>
     collectNodes(parsed, path),
   );
 
-  const documentNodes = houseConsignments.flatMap((node) =>
+  const documentNodes = consignments.flatMap((node) =>
     collectSupportingDocuments(node),
   );
 
