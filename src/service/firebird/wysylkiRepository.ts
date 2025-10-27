@@ -1,4 +1,4 @@
-import type { ResultSet, Transaction } from "node-firebird-driver";
+import type { Attachment, ResultSet, Transaction } from "node-firebird-driver";
 import { getFirebirdConfig } from "../../config/firebirdConfig";
 import {
   buildConnectOptions,
@@ -18,6 +18,65 @@ export type FetchWysylkiByMrnOptions = {
 };
 
 export type FetchWysylkiByDateOptions = FetchWysylkiByMrnOptions;
+
+const SADUE_DETAILS_SQL = `
+  SELECT
+    r.UZYTKOWNIK,
+    r.OGOLNAWARTOSC,
+    r.WALUTASADU,
+    r.KOMENTARZ,
+    r.ZGLASZAJACY,
+    r.KRAJPRZEZNACZ
+  FROM SADUE r
+  WHERE r.IDSADUE = ?
+`;
+
+const normalizeSadueId = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "bigint") {
+    const candidate = Number(value);
+    return Number.isFinite(candidate) ? candidate : null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+const fetchSadueDetails = async (
+  attachment: Attachment,
+  transaction: Transaction,
+  sadueId: number
+): Promise<Record<string, unknown> | null> => {
+  let resultSet: ResultSet | null = null;
+
+  try {
+    resultSet = await attachment.executeQuery(
+      transaction,
+      SADUE_DETAILS_SQL,
+      [sadueId]
+    );
+    const rows = await resultSet.fetchAsObject<Record<string, unknown>>();
+    if (!rows || rows.length === 0) {
+      return null;
+    }
+
+    return rows[0];
+  } finally {
+    await closeResultSetQuietly(resultSet);
+  }
+};
 
 const buildQueryConditions = (
   normalizedMrn: string,
@@ -125,6 +184,7 @@ export const fetchWysylkiByMrn = async (
       await resultSet.close();
       resultSet = null;
 
+      const sadueCache = new Map<number, Record<string, unknown> | null>();
       if (!transaction || !transaction.isValid) {
         throw new Error(
           "Firebird transaction ended unexpectedly while decoding WYSYLKICELINA rows"
@@ -133,12 +193,33 @@ export const fetchWysylkiByMrn = async (
 
       const decodedRows: Record<string, unknown>[] = [];
       for (const row of rows) {
-        decodedRows.push(
-          await mapWysylkaRowWithAllColumns(row, attachment, transaction, {
+        const mapped = await mapWysylkaRowWithAllColumns(
+          row,
+          attachment,
+          transaction,
+          {
             includeDocumentXml,
             includeResponseXml,
-          })
+          }
         );
+
+        const sadueId = normalizeSadueId(row["IDDOKUMENTUZRD"]);
+        if (sadueId !== null) {
+          let sadueDetails = sadueCache.get(sadueId);
+          if (sadueDetails === undefined) {
+            sadueDetails = await fetchSadueDetails(
+              attachment,
+              transaction,
+              sadueId
+            );
+            sadueCache.set(sadueId, sadueDetails ?? null);
+          }
+          mapped.sadue = sadueDetails ?? null;
+        } else {
+          mapped.sadue = null;
+        }
+
+        decodedRows.push(mapped);
       }
 
       if (transaction.isValid) {
@@ -238,6 +319,7 @@ export const fetchWysylkiByCreationDate = async (
       await resultSet.close();
       resultSet = null;
 
+      const sadueCache = new Map<number, Record<string, unknown> | null>();
       if (!transaction || !transaction.isValid) {
         throw new Error(
           "Firebird transaction ended unexpectedly while decoding WYSYLKICELINA rows"
@@ -246,12 +328,33 @@ export const fetchWysylkiByCreationDate = async (
 
       const decodedRows: Record<string, unknown>[] = [];
       for (const row of rows) {
-        decodedRows.push(
-          await mapWysylkaRowWithAllColumns(row, attachment, transaction, {
+        const mapped = await mapWysylkaRowWithAllColumns(
+          row,
+          attachment,
+          transaction,
+          {
             includeDocumentXml,
             includeResponseXml,
-          })
+          }
         );
+
+        const sadueId = normalizeSadueId(row["IDDOKUMENTUZRD"]);
+        if (sadueId !== null) {
+          let sadueDetails = sadueCache.get(sadueId);
+          if (sadueDetails === undefined) {
+            sadueDetails = await fetchSadueDetails(
+              attachment,
+              transaction,
+              sadueId
+            );
+            sadueCache.set(sadueId, sadueDetails ?? null);
+          }
+          mapped.sadue = sadueDetails ?? null;
+        } else {
+          mapped.sadue = null;
+        }
+
+        decodedRows.push(mapped);
       }
 
       if (transaction.isValid) {
