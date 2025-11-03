@@ -79,8 +79,11 @@ export const wysylkaXmlConfig: readonly WysylkaXmlSectionConfig[] = [
       {
         name: "deliveryDate",
         paths: [
+          "IE029PL.CountrySpecificDataPL.DeclarationSubmissionDate",
+          "IE029PL.CC029C.CountrySpecificDataPL.DeclarationSubmissionDate",
           "IE029PL.CountrySpecificDataPL.DeliveryDate",
           "IE029PL.CC029C.CountrySpecificDataPL.DeliveryDate",
+          "IE028PL.CC028C.CountrySpecificDataPL.DeclarationSubmissionDate",
           "IE028PL.CC028C.CountrySpecificDataPL.DeliveryDate",
         ],
         regex: "^\\d{4}-\\d{2}-\\d{2}$",
@@ -107,6 +110,9 @@ export const wysylkaXmlConfig: readonly WysylkaXmlSectionConfig[] = [
       {
         name: "releaseDate",
         paths: [
+          "IE029PL.CC029C.ControlResult.date",
+          "IE028PL.CC028C.ControlResult.date",
+          "IE045PL.CC045C.ControlResult.date",
           "IE029PL.CC029C.CountrySpecificDataPL.ReleaseDate",
           "IE029PL.CountrySpecificDataPL.ReleaseDate",
           "IE028PL.CC028C.CountrySpecificDataPL.ReleaseDate",
