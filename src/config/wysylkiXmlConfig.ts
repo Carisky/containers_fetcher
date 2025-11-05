@@ -1,7 +1,8 @@
 export type WysylkaXmlSourceKey = "odpowiedzXml" | "dokumentXml";
 
 export type WysylkaXmlFieldAggregator =
-  | "houseConsignmentSupportingDocumentsSum";
+  | "houseConsignmentSupportingDocumentsSum"
+  | "transitOperationReleaseDateValue";
 
 export type WysylkaXmlFieldConfig = {
   name: string;
@@ -109,6 +110,7 @@ export const wysylkaXmlConfig: readonly WysylkaXmlSectionConfig[] = [
       },
       {
         name: "releaseDate",
+        aggregate: "transitOperationReleaseDateValue",
         paths: [
           "IE029PL.CC029C.ControlResult.date",
           "IE028PL.CC028C.ControlResult.date",

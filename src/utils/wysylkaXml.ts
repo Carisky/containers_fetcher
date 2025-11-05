@@ -399,6 +399,32 @@ function aggregateHouseConsignmentSupportingDocumentsSum(
   return `${formattedTotal}${currencyLabel}`.trim();
 }
 
+const TRANSIT_OPERATION_RELEASE_DATE_PATHS: readonly string[] = [
+  "IE029PL.CC029C.TransitOperation.releaseDate",
+  "IE028PL.CC028C.TransitOperation.releaseDate",
+  "IE045PL.CC045C.TransitOperation.releaseDate",
+];
+
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function aggregateTransitOperationReleaseDateValue(parsed: unknown): string | null {
+  for (const path of TRANSIT_OPERATION_RELEASE_DATE_PATHS) {
+    const candidate = getValueAtPath(parsed, path);
+    if (!candidate) {
+      continue;
+    }
+
+    const trimmed = candidate.trim();
+    if (!ISO_DATE_PATTERN.test(trimmed)) {
+      continue;
+    }
+
+    return trimmed;
+  }
+
+  return null;
+}
+
 function runFieldAggregator(
   key: WysylkaXmlFieldAggregator,
   parsed: unknown,
@@ -406,6 +432,8 @@ function runFieldAggregator(
   switch (key) {
     case "houseConsignmentSupportingDocumentsSum":
       return aggregateHouseConsignmentSupportingDocumentsSum(parsed);
+    case "transitOperationReleaseDateValue":
+      return aggregateTransitOperationReleaseDateValue(parsed);
     default:
       return null;
   }
