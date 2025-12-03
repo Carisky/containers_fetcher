@@ -1,6 +1,10 @@
+import axios from "axios";
+import { wrapper } from "axios-cookiejar-support";
+import { CookieJar } from "tough-cookie";
+
 import { http } from "../utils/http";
 import { buildContainerInfoFromCsv } from "../utils/csv";
-import { extractCenFromBctXml, extractStatusFromBctXml } from "../utils/bct";
+import { extractContainerInfoFromBctHtml } from "../utils/bct";
 import { sleep } from "../utils/time";
 import type { BctInfo, ContainerInfo } from "../types/index";
 
@@ -36,29 +40,55 @@ export async function fetchBctForContainer(
   cont: string,
   retries = 3
 ): Promise<BctInfo> {
-  const baseUrl = "https://online.bct.gdynia.pl/Main/Bct/Container";
+  const pageUrl = "https://ebrama.bct.ictsi.com/vbs-check-container";
+  const submitUrl = "https://ebrama.bct.ictsi.com/Tiles/TileCheckContainerSubmit";
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      const params = {
-        ajax: "xContainerResult",
-        container: cont,
-        xrootAjax: String(Math.floor(10_000_000 + Math.random() * 90_000_000)),
-      } as const;
+      const jar = new CookieJar();
+      const client = wrapper(
+        axios.create({
+          jar,
+          withCredentials: true,
+          timeout: 20000,
+          headers: {
+            "User-Agent": "Mozilla/5.0",
+          },
+        })
+      );
 
-      const { data } = await http.get<string>(baseUrl, {
-        params,
-        responseType: "text",
+      const { data: page } = await client.get<string>(pageUrl, {
         headers: {
-          Accept: "text/xml,application/xml;q=0.9,*/*;q=0.8",
-          Referer: baseUrl,
-          "X-Requested-With": "XMLHttpRequest",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
-        timeout: 15000,
+        responseType: "text",
       });
 
-      const cen = extractCenFromBctXml(data, cont);
-      const status = extractStatusFromBctXml(data);
-      if (cen || status) return { cen, status };
+      const tokenMatch = page.match(/name="__RequestVerificationToken"[^>]*value="([^"]+)"/);
+      const token = tokenMatch?.[1];
+      if (!token) {
+        throw new Error("Missing anti-forgery token");
+      }
+
+      const payload = new URLSearchParams({
+        __RequestVerificationToken: token,
+        ContainerNo: cont,
+        "X-Requested-With": "XMLHttpRequest",
+      }).toString();
+
+      const { data: result } = await client.post<string>(submitUrl, payload, {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "X-Requested-With": "XMLHttpRequest",
+          Referer: pageUrl,
+          Accept: "*/*",
+        },
+        responseType: "text",
+      });
+
+      const info = extractContainerInfoFromBctHtml(result);
+      if (info.cen || info.status) {
+        return info;
+      }
       if (attempt < retries) await sleep(1500);
     } catch (e) {
       if (attempt < retries) await sleep(2000);
