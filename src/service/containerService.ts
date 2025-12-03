@@ -1,5 +1,4 @@
 import axios from "axios";
-import { wrapper } from "axios-cookiejar-support";
 import { CookieJar } from "tough-cookie";
 
 import { http } from "../utils/http";
@@ -36,32 +35,43 @@ export async function fetchContainerInfo(
   return {};
 }
 
+const storeCookies = async (jar: CookieJar, url: string, cookies: string[] | undefined) => {
+  if (!cookies || cookies.length === 0) return;
+  for (const cookie of cookies) {
+    await jar.setCookie(cookie, url, { ignoreError: true });
+  }
+};
+
+const collectCookieHeader = async (jar: CookieJar, url: string): Promise<string | undefined> => {
+  const cookieStr = await jar.getCookieString(url);
+  return cookieStr.trim() ? cookieStr : undefined;
+};
+
 export async function fetchBctForContainer(
   cont: string,
   retries = 3
 ): Promise<BctInfo> {
   const pageUrl = "https://ebrama.bct.ictsi.com/vbs-check-container";
   const submitUrl = "https://ebrama.bct.ictsi.com/Tiles/TileCheckContainerSubmit";
+  const client = axios.create({
+    timeout: 20000,
+    headers: {
+      "User-Agent": "Mozilla/5.0",
+    },
+  });
+
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const jar = new CookieJar();
-      const client = wrapper(
-        axios.create({
-          jar,
-          withCredentials: true,
-          timeout: 20000,
-          headers: {
-            "User-Agent": "Mozilla/5.0",
-          },
-        })
-      );
-
-      const { data: page } = await client.get<string>(pageUrl, {
+      const { data: page, headers } = await client.get<string>(pageUrl, {
         headers: {
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
         responseType: "text",
       });
+
+      const setCookieHeader = headers["set-cookie"];
+      await storeCookies(jar, pageUrl, Array.isArray(setCookieHeader) ? setCookieHeader : setCookieHeader ? [setCookieHeader] : undefined);
 
       const tokenMatch = page.match(/name="__RequestVerificationToken"[^>]*value="([^"]+)"/);
       const token = tokenMatch?.[1];
@@ -75,13 +85,19 @@ export async function fetchBctForContainer(
         "X-Requested-With": "XMLHttpRequest",
       }).toString();
 
+      const cookieHeader = await collectCookieHeader(jar, pageUrl);
+      const postHeaders: Record<string, string> = {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+        Referer: pageUrl,
+        Accept: "*/*",
+      };
+      if (cookieHeader) {
+        postHeaders.Cookie = cookieHeader;
+      }
+
       const { data: result } = await client.post<string>(submitUrl, payload, {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "X-Requested-With": "XMLHttpRequest",
-          Referer: pageUrl,
-          Accept: "*/*",
-        },
+        headers: postHeaders,
         responseType: "text",
       });
 
