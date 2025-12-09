@@ -8,6 +8,7 @@ import {
   withFirebirdAttachment,
 } from "./connection";
 import { mapWysylkaRowWithAllColumns } from "./wysylkaMapper";
+import { isIsoDateOnlyFormat, parseIsoDateOnly } from "./dateUtils";
 
 export type FetchWysylkiByMrnOptions = {
   fileCode?: string;
@@ -100,12 +101,12 @@ const buildQueryConditions = (
 };
 
 const buildDateQueryConditions = (
-  normalizedDate: string,
+  targetDate: Date,
   normalizedFileCode: string,
   preferXml: boolean
 ) => {
   const conditions = ["CAST(r.DATAUTWORZENIA AS DATE) = ?"];
-  const parameters: unknown[] = [parseIsoDateOnly(normalizedDate)];
+  const parameters: unknown[] = [targetDate];
 
   if (normalizedFileCode) {
     conditions.push("r.NAZWAPLIKU CONTAINING ?");
@@ -240,35 +241,6 @@ export const fetchWysylkiByMrn = async (
   });
 };
 
-const DATE_INPUT_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-
-const parseIsoDateOnly = (value: string): Date => {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
-  if (!match) {
-    throw new Error("Invalid date format. Expected YYYY-MM-DD.");
-  }
-
-  const [, yearRaw, monthRaw, dayRaw] = match;
-  const year = Number.parseInt(yearRaw, 10);
-  const month = Number.parseInt(monthRaw, 10);
-  const day = Number.parseInt(dayRaw, 10);
-
-  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
-    throw new Error("Invalid date components. Expected numeric year, month, and day.");
-  }
-
-  const date = new Date(Date.UTC(year, month - 1, day));
-  if (
-    date.getUTCFullYear() !== year ||
-    date.getUTCMonth() + 1 !== month ||
-    date.getUTCDate() !== day
-  ) {
-    throw new Error("Invalid calendar date. Please verify the provided value.");
-  }
-
-  return date;
-};
-
 export const fetchWysylkiByCreationDate = async (
   rawDate: string,
   filterOptions: FetchWysylkiByDateOptions = {}
@@ -277,11 +249,12 @@ export const fetchWysylkiByCreationDate = async (
   if (!normalizedDate) {
     throw new Error("Date value must be a non-empty string");
   }
-  if (!DATE_INPUT_PATTERN.test(normalizedDate)) {
+  if (!isIsoDateOnlyFormat(normalizedDate)) {
     throw new Error(
       "Date must be provided in the ISO format YYYY-MM-DD (e.g., 2025-01-03)"
     );
   }
+  const parsedDate = parseIsoDateOnly(normalizedDate);
 
   const preferXml = filterOptions.preferXml === true;
   const limit = normaliseLimit(filterOptions.limit, preferXml);
@@ -293,7 +266,7 @@ export const fetchWysylkiByCreationDate = async (
     filterOptions.includeResponseXml ?? true;
 
   const { conditions, parameters } = buildDateQueryConditions(
-    normalizedDate,
+    parsedDate,
     normalizedFileCode,
     preferXml
   );

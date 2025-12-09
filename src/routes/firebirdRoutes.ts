@@ -2,6 +2,7 @@ import { Router } from "express";
 import {
   checkFirebirdConnection,
   fetchCmrSampleRows,
+  fetchRejestrEntriesByDeclarationDate,
   fetchWysylkiByCreationDate,
   fetchWysylkiByMrn,
 } from "../service/firebird";
@@ -10,6 +11,7 @@ import {
   parseXmlFieldsForWysylkaRow,
 } from "../utils/wysylkaXml";
 import { getFirstQueryParam } from "./helpers/queryParams";
+import { isIsoDateOnlyFormat } from "../service/firebird/dateUtils";
 
 const firebirdRoutes = Router();
 
@@ -210,6 +212,49 @@ firebirdRoutes.get("/wysylki/date/:date", async (req, res) => {
       format: preferXml ? "xml" : normalizedFormat || undefined,
       count: filteredRows.length,
       rows: filteredRows,
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: "error",
+      message: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+firebirdRoutes.get("/rejestr/:date", async (req, res) => {
+  const rawDate = typeof req.params.date === "string" ? req.params.date : "";
+  const normalizedDate = rawDate.trim();
+
+  if (!normalizedDate) {
+    res.status(400).json({
+      status: "error",
+      message: "Route parameter `date` must be a non-empty string.",
+    });
+    return;
+  }
+
+  if (!isIsoDateOnlyFormat(normalizedDate)) {
+    res.status(400).json({
+      status: "error",
+      message: "Date must be provided in the ISO format YYYY-MM-DD.",
+    });
+    return;
+  }
+
+  try {
+    const rows = await fetchRejestrEntriesByDeclarationDate(normalizedDate);
+    if (rows.length === 0) {
+      res.status(404).json({
+        status: "error",
+        message: `No registry entries found for date ${normalizedDate}.`,
+      });
+      return;
+    }
+
+    res.json({
+      date: normalizedDate,
+      count: rows.length,
+      rows,
     });
   } catch (error) {
     res.status(503).json({

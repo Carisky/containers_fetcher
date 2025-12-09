@@ -18,3 +18,5 @@ export {
   fetchWysylkiByCreationDate,
   fetchWysylkiByMrn,
 } from "./wysylkiRepository";
+export type { RejestrSummary } from "./rejestrRepository";
+export { fetchRejestrEntriesByDeclarationDate } from "./rejestrRepository";
