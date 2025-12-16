@@ -3,12 +3,14 @@ export type ContainerId = string;
 export interface ContainerCsvInfo {
   cen?: string;
   t_state?: string;
+  stop?: string;
   date: number; // legacy epoch tie breaker
   timeIn?: number;
   timeOut?: number;
 }
 
 export interface ContainerInfo {
+  stop?: string;
   cen?: string;
   t_state?: string;
 }

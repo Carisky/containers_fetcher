@@ -5,6 +5,7 @@ import {
 } from "../service/containerService";
 import { mapWithConcurrency } from "../utils/concurrency";
 import { sleep } from "../utils/time";
+import type { ContainerInfo } from "../types/index";
 
 const DEFAULT_BCT_CONCURRENCY = 5;
 const DEFAULT_CONTAINER_CONCURRENCY = 3;
@@ -86,21 +87,17 @@ export class ContainerController {
       return { cont, info };
     });
 
-    const infoMap: Record<string, { cen?: string; t_state?: string }> = {};
+    const infoMap: Record<string, ContainerInfo> = {};
     for (const { info } of results) {
       Object.assign(infoMap, info);
     }
 
-    if (!wantT) {
-      const map: Record<string, string> = {};
-      for (const [k, v] of Object.entries(infoMap)) map[k] = v.cen ?? "";
-      return res.json({ map });
-    } else {
-      const map: Record<string, { cen: string; t_state: string }> = {};
-      for (const [k, v] of Object.entries(infoMap)) {
-        map[k] = { cen: v.cen ?? "", t_state: v.t_state ?? "" };
-      }
-      return res.json({ map });
+    const map: Record<string, { cen: string; stop: string; t_state?: string }> = {};
+    for (const [k, v] of Object.entries(infoMap)) {
+      const base = { cen: v.cen ?? "", stop: v.stop ?? "" };
+      map[k] = wantT ? { ...base, t_state: v.t_state ?? "" } : base;
     }
+
+    return res.json({ map });
   }
 }

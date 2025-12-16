@@ -26,7 +26,7 @@ export async function fetchContainerInfo(
 
         const info = buildContainerInfoFromCsv(data);
         const i = info[cont] || {};
-        return { [cont]: { cen: i.cen, t_state: i.t_state } };
+        return { [cont]: { cen: i.cen, t_state: i.t_state, stop: i.stop } };
       }
     } catch (err) {
       if (attempt < retries) await sleep(2000);

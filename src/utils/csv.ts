@@ -19,6 +19,7 @@ const tStateKeys = ["tstate"] as const;
 const customsSealKeys = ["customsseal"] as const;
 const timeInKeys = ["timein", "timeindate", "timeindatetime", "commodityweightkg"] as const;
 const timeOutKeys = ["timeout", "timeoutdate", "timeoutdatetime", "cargoweightkg"] as const;
+const stopsKeys = ["stops"] as const;
 
 const normalizeValue = (value?: string): string | undefined => {
   if (typeof value !== "string") return undefined;
@@ -149,6 +150,7 @@ export function buildContainerInfoFromCsv(csv: string): Record<string, Container
     const { value: cenValue, confidence: cenConfidence } = pickCen(row, status);
     const timeIn = pickTimestamp(row, timeInKeys);
     const timeOut = pickTimestamp(row, timeOutKeys);
+    const stop = pickValue(row, stopsKeys);
 
     const isExplicitNoCen = cenValue === NO_CEN_VALUE;
     const candidate: CandidateInfo = {
@@ -162,6 +164,7 @@ export function buildContainerInfoFromCsv(csv: string): Record<string, Container
       t_state: status,
       timeIn,
       timeOut,
+      stop,
       date: timeIn ?? timeOut ?? 0,
     };
 
@@ -178,6 +181,8 @@ export function buildContainerInfoFromCsv(csv: string): Record<string, Container
         cenConfidence: candidate.cen ? candidate.cenConfidence : existing.cenConfidence,
         hasExplicitNoCen: candidate.hasExplicitNoCen || existing.hasExplicitNoCen,
         t_state: candidate.t_state ?? existing.t_state,
+
+        stop: candidate.stop ?? existing.stop,
       };
       continue;
     }
@@ -194,6 +199,9 @@ export function buildContainerInfoFromCsv(csv: string): Record<string, Container
     if (!existing.t_state && candidate.t_state) {
       existing.t_state = candidate.t_state;
     }
+    if (!existing.stop && candidate.stop) {
+      existing.stop = candidate.stop;
+    }
   }
 
   const output: Record<string, ContainerCsvInfo> = {};
@@ -207,5 +215,4 @@ export function buildContainerInfoFromCsv(csv: string): Record<string, Container
 
   return output;
 }
-
 
