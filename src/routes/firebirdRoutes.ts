@@ -224,6 +224,8 @@ firebirdRoutes.get("/wysylki/date/:date", async (req, res) => {
 firebirdRoutes.get("/rejestr/:date", async (req, res) => {
   const rawDate = typeof req.params.date === "string" ? req.params.date : "";
   const normalizedDate = rawDate.trim();
+  const rawDevFlag = getFirstQueryParam(req.query.dev);
+  const includeXml = rawDevFlag.trim().toLowerCase() === "true";
 
   if (!normalizedDate) {
     res.status(400).json({
@@ -251,10 +253,17 @@ firebirdRoutes.get("/rejestr/:date", async (req, res) => {
       return;
     }
 
+    const sanitizedRows = includeXml
+      ? rows
+      : rows.map((row) => {
+          const { xmlDoc, ...rest } = row;
+          return rest;
+        });
+
     res.json({
       date: normalizedDate,
-      count: rows.length,
-      rows,
+      count: sanitizedRows.length,
+      rows: sanitizedRows,
     });
   } catch (error) {
     res.status(503).json({
