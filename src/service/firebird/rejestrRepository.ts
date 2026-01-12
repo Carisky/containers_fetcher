@@ -19,6 +19,7 @@ export type RejestrSummary = {
   sumavat: string | null;
   setSumVat: string | null;
   sadNumber: string | null;
+  ucZgloszenia: string | null;
   sadueId: number | null;
   sadueSupplementId: number | null;
 };
@@ -39,6 +40,7 @@ const REJWPISY_ENRICHED_BY_DATE_SQL = `
       s.DODIDSADU
     ) AS SAD_NUMBER,
     COALESCE(s_supp.SUMAVAT, s.SUMAVAT) AS SAD_SUM_VAT,
+    COALESCE(s_supp.UCZGLOSZENIA, s.UCZGLOSZENIA) AS UCZGLOSZENIA,
     COALESCE(z_supp.MRN, z_main.MRN, i_supp.MRN, i_main.MRN) AS MRN,
     COALESCE(z_supp.SUMAVATZESTAWU, z_main.SUMAVATZESTAWU) AS SET_SUM_VAT
   FROM REJWPISY r
@@ -378,6 +380,7 @@ export const fetchRejestrEntriesByDeclarationDate = async (
           const sumavat = coerceToString(row["SAD_SUM_VAT"]);
           const setSumVat = coerceToString(row["SET_SUM_VAT"]);
           const sadNumber = coerceToString(row["SAD_NUMBER"]);
+          const ucZgloszenia = coerceToString(row["UCZGLOSZENIA"]);
           const sourceMrn = coerceToString(row["MRN"]);
           let xmlDoc: string | null = null;
           const sourceHasExpectedYear =
@@ -446,6 +449,7 @@ export const fetchRejestrEntriesByDeclarationDate = async (
             sumavat,
             setSumVat,
             sadNumber,
+            ucZgloszenia,
             sadueId,
             sadueSupplementId,
           });
