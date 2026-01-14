@@ -1,5 +1,9 @@
 import type { Attachment, ResultSet, Transaction } from "node-firebird-driver";
-import { parseXmlFieldsForWysylkaRow } from "../../utils/wysylkaXml";
+import {
+  extractZgloszenieKodFromXml,
+  parseXmlFieldsForWysylkaRow,
+  type ZgloszenieKod,
+} from "../../utils/wysylkaXml";
 import {
   closeResultSetQuietly,
   rollbackQuietly,
@@ -15,6 +19,7 @@ export type RejestrSummary = {
   creationDate: string | null;
   pozRej: string | null;
   mrn: string | null;
+  zgloszenieKod: ZgloszenieKod | null;
   xmlDoc: string | null;
   sumavat: string | null;
   setSumVat: string | null;
@@ -440,11 +445,16 @@ export const fetchRejestrEntriesByDeclarationDate = async (
             xmlDoc = resolution.xmlDoc;
           }
 
+          const zgloszenieKod = xmlDoc ? extractZgloszenieKodFromXml(xmlDoc) : null;
+          const responseMrn =
+            zgloszenieKod === "ZC428" ? "zgloszenie zarejestrowane (ZC428)" : mrn;
+
           entries.push({
             date: normalizedDate,
             creationDate,
             pozRej,
-            mrn,
+            mrn: responseMrn,
+            zgloszenieKod,
             xmlDoc,
             sumavat,
             setSumVat,

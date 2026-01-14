@@ -10,6 +10,8 @@ type ExtractedFields = Record<string, string | null>;
 
 type WysylkaRow = Record<string, unknown>;
 
+export type ZgloszenieKod = "ZC428" | "ZC429";
+
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   ignoreDeclaration: true,
@@ -65,6 +67,21 @@ const sanitizeXml = (value: string): string => {
   const firstTag = candidate.indexOf("<");
   const sliced = firstTag > 0 ? candidate.slice(firstTag) : candidate;
   return sliced.replace(/\u0000+/g, "");
+};
+
+export const extractZgloszenieKodFromXml = (xml: string): ZgloszenieKod | null => {
+  const sanitized = sanitizeXml(xml);
+  if (!sanitized) {
+    return null;
+  }
+
+  const match = sanitized.match(/<\s*(?:[A-Za-z_][\w.-]*:)?(ZC\d{3})\b/);
+  if (!match) {
+    return null;
+  }
+
+  const code = match[1];
+  return code === "ZC428" || code === "ZC429" ? code : null;
 };
 
 type PathSegment = {
