@@ -355,7 +355,7 @@ export const checkFirebirdConnection = async (): Promise<void> => {
 
   await withFirebirdAttachment(async ({ attachment }) => {
     console.log(
-      `[firebird] Checking connection to ${uri} with user ${options.username ?? "(default)"}`
+      `[firebird] Checking connection to SADDANEIB.FDB`
     );
 
     if (!attachment.isValid) {

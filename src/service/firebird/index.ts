@@ -20,3 +20,5 @@ export {
 } from "./wysylkiRepository";
 export type { RejestrSummary } from "./rejestrRepository";
 export { fetchRejestrEntriesByDeclarationDate } from "./rejestrRepository";
+export type { UsualRejestrSummary } from "./usualRejestrRepository";
+export { fetchUsualRejestrEntriesByDeclarationDate } from "./usualRejestrRepository";

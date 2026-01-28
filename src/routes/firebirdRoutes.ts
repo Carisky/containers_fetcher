@@ -3,6 +3,7 @@ import {
   checkFirebirdConnection,
   fetchCmrSampleRows,
   fetchRejestrEntriesByDeclarationDate,
+  fetchUsualRejestrEntriesByDeclarationDate,
   fetchWysylkiByCreationDate,
   fetchWysylkiByMrn,
 } from "../service/firebird";
@@ -226,6 +227,18 @@ firebirdRoutes.get("/rejestr/:date", async (req, res) => {
   const normalizedDate = rawDate.trim();
   const rawDevFlag = getFirstQueryParam(req.query.dev);
   const includeXml = rawDevFlag.trim().toLowerCase() === "true";
+  const rawUsualFlag = getFirstQueryParam(req.query.usual);
+  const rawModeFlag = getFirstQueryParam(req.query.mode);
+  const rawFlagFlag = getFirstQueryParam(req.query.flag);
+  const normalizedFlagValue =
+    rawUsualFlag.trim().toLowerCase() ||
+    rawModeFlag.trim().toLowerCase() ||
+    rawFlagFlag.trim().toLowerCase();
+  const hasUsualKey = Object.prototype.hasOwnProperty.call(req.query ?? {}, "usual");
+  const useUsual =
+    normalizedFlagValue === "usual" ||
+    ["1", "true", "yes", "y", "on"].includes(normalizedFlagValue) ||
+    (hasUsualKey && normalizedFlagValue === "");
 
   if (!normalizedDate) {
     res.status(400).json({
@@ -244,8 +257,19 @@ firebirdRoutes.get("/rejestr/:date", async (req, res) => {
   }
 
   try {
-    const rows = await fetchRejestrEntriesByDeclarationDate(normalizedDate);
+    const rows = useUsual
+      ? await fetchUsualRejestrEntriesByDeclarationDate(normalizedDate)
+      : await fetchRejestrEntriesByDeclarationDate(normalizedDate);
     if (rows.length === 0) {
+      if (useUsual) {
+        res.json({
+          date: normalizedDate,
+          count: 0,
+          rows: [],
+        });
+        return;
+      }
+
       res.status(404).json({
         status: "error",
         message: `No registry entries found for date ${normalizedDate}.`,

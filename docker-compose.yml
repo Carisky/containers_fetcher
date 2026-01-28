@@ -1,0 +1,8 @@
+services:
+  containers-fetcher:
+    build: .
+    ports:
+      - "3400:3400"
+    env_file:
+      - .env
+    restart: unless-stopped

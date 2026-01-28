@@ -75,13 +75,119 @@ export const extractZgloszenieKodFromXml = (xml: string): ZgloszenieKod | null =
     return null;
   }
 
-  const match = sanitized.match(/<\s*(?:[A-Za-z_][\w.-]*:)?(ZC\d{3})\b/);
+  const match = sanitized.match(/<\s*(?:[A-Za-z_][\w.-]*:)?(ZC\d{3})\b/i);
   if (!match) {
     return null;
   }
 
-  const code = match[1];
+  const code = match[1].toUpperCase();
   return code === "ZC428" || code === "ZC429" ? code : null;
+};
+
+export const extractMessageCodesFromXml = (xml: string): string[] => {
+  const sanitized = sanitizeXml(xml);
+  if (!sanitized) {
+    return [];
+  }
+
+  const codes = new Set<string>();
+  const regex = /<\s*\/?\s*(?:[A-Za-z_][\w.-]*:)?([A-Z]{2}\d{3}[A-Z]{0,2})\b/gi;
+  let match: RegExpExecArray | null = null;
+
+  while ((match = regex.exec(sanitized)) !== null) {
+    const code = match[1]?.trim().toUpperCase();
+    if (code) {
+      codes.add(code);
+      if (codes.size >= 30) {
+        break;
+      }
+    }
+  }
+
+  return Array.from(codes);
+};
+
+export const extractAdditionalDeclarationTypeFromZcXml = (xml: string): string | null => {
+  const sanitized = sanitizeXml(xml);
+  if (!sanitized) {
+    return null;
+  }
+
+  const match = sanitized.match(
+    /<\s*(?:[A-Za-z_][\w.-]*:)?additionalDeclarationType\b[^>]*>\s*([A-Za-z])\s*</i
+  );
+  if (!match) {
+    return null;
+  }
+
+  const value = match[1]?.trim().toUpperCase();
+  return value && value.length > 0 ? value : null;
+};
+
+const MRN_VALUE_REGEX = /^[A-Z0-9]{18}$/;
+const UCZGLOSZENIA_VALUE_REGEX = /^[A-Z0-9]{4,12}$/i;
+
+const MRN_KEY_PATTERNS = [/mrn/i, /nr.?mrn/i];
+const UCZGLOSZENIA_KEY_PATTERNS = [/uc.?zglosz/i, /urzad.?celn.*zglosz/i];
+
+export const extractMrnFromXmlLoose = (xml: string): string | null => {
+  const sanitized = sanitizeXml(xml);
+  if (!sanitized) {
+    return null;
+  }
+
+  const directTagMatch = sanitized.match(
+    /<\s*(?:[A-Za-z_][\w.-]*:)?MRN\b[^>]*>\s*([A-Z0-9]{18})\s*</i
+  );
+  if (directTagMatch) {
+    return directTagMatch[1].trim();
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = xmlParser.parse(sanitized);
+  } catch {
+    return null;
+  }
+
+  const candidate = extractFirstMatchingString(
+    parsed,
+    (key) => matchesAnyPattern(MRN_KEY_PATTERNS, key),
+    getFirstNonEmptyString
+  );
+
+  if (!candidate) {
+    return null;
+  }
+
+  const trimmed = candidate.trim();
+  return MRN_VALUE_REGEX.test(trimmed) ? trimmed : null;
+};
+
+export const extractUcZgloszeniaFromXmlLoose = (xml: string): string | null => {
+  const sanitized = sanitizeXml(xml);
+  if (!sanitized) {
+    return null;
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = xmlParser.parse(sanitized);
+  } catch {
+    return null;
+  }
+
+  const candidate = extractFirstMatchingString(
+    parsed,
+    (key) => matchesAnyPattern(UCZGLOSZENIA_KEY_PATTERNS, key),
+    getFirstNonEmptyString
+  );
+  if (!candidate) {
+    return null;
+  }
+
+  const trimmed = candidate.trim();
+  return UCZGLOSZENIA_VALUE_REGEX.test(trimmed) ? trimmed : trimmed.length > 0 ? trimmed : null;
 };
 
 type PathSegment = {

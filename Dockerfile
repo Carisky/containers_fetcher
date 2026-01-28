@@ -13,6 +13,7 @@ RUN mkdir -p lib/fbclient \
 
 FROM node:24-slim
 ENV NODE_ENV=production
+ENV HEALTHCHECK_WATCHDOG_ENABLED=true
 WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libfbclient2 \
@@ -23,4 +24,5 @@ COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/lib ./lib
 EXPOSE 3400
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD ["node", "dist/healthcheck.js"]
 CMD ["node", "dist/server.js"]
